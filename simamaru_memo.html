@@ -151,6 +151,17 @@ body{
 .act-focus{background:linear-gradient(135deg,#fff,#ffeef6);color:var(--pink)}
 .act-shop{background:linear-gradient(135deg,#fff,#eef9f1);color:#3aa55f}
 
+/* daily play / practice apps */
+.play-row{display:flex;align-items:center;gap:10px;padding:11px 4px}
+.play-row + .play-row{border-top:1px dashed #f0d7e4}
+.play-emoji{font-size:26px;flex-shrink:0}
+.play-mid{flex:1;min-width:0}
+.play-name{font-size:14px;font-weight:800;color:var(--ink)}
+.play-desc{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word}
+.play-add{border:none;border-radius:12px;background:#fff0f8;color:var(--pink);font-family:inherit;font-weight:800;font-size:12px;padding:9px 10px;cursor:pointer;flex-shrink:0}
+.play-open{border:none;border-radius:12px;background:linear-gradient(135deg,#e8629a,#f4a0c4);color:#fff;font-family:inherit;font-weight:900;font-size:13px;padding:9px 13px;cursor:pointer;flex-shrink:0;text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.play-add:active,.play-open:active{transform:scale(.95)}
+
 /* today list compact */
 .mini-task{
   display:flex;align-items:center;gap:11px;padding:11px 6px;border-radius:14px;
@@ -208,6 +219,8 @@ body{
 .tbtn.edit{background:#eef6ff;color:#5b8bd9}
 .tbtn.del{background:#fff0f0;color:#ff7b7b}
 .tbtn.focus{background:#fff0f8;color:var(--pink)}
+.tbtn.open{background:#eafaf0;color:#3aa55f}
+a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;justify-content:center}
 
 .subtask-box{margin-top:12px;padding:12px;background:#faf8fc;border-radius:14px}
 .subtask-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
@@ -450,6 +463,11 @@ body{
     <div class="home-actions">
       <button class="act-focus" onclick="openFocus()"><span class="ic">⏱️</span>しゅうちゅうタイム</button>
       <button class="act-shop" onclick="openShop()"><span class="ic">🛖</span>すづくり</button>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🎮 きょうの あそび・れんしゅう</div>
+      <div id="play-area"></div>
     </div>
 
     <div class="card">
@@ -762,6 +780,11 @@ const BADGES = [
   {id:'dex',   emoji:'📖', name:'ずかんはかせ', desc:'ひな ぜんしゅるい コンプ', test:g=>discoveredSpecies().length>=SPECIES.length},
   {id:'legend',emoji:'👑', name:'でんせつとの であい', desc:'でんせつの ひなを 孵化', test:g=>g.hatched.some(h=>h.rarity==='l')}
 ];
+/* 日常タスクに入れやすい “あそび・れんしゅう” アプリ（GitHub Pages 公開URL） */
+const EXTERNAL_APPS = [
+  {id:'typing', name:'しままるタイピング', emoji:'⌨️', url:'https://hikavn.github.io/shimamaru-typing/', desc:'ゆびの たいそう・タイピングれんしゅう'},
+  {id:'codori', name:'コドリ', emoji:'🐤', url:'https://hikavn.github.io/codori-preview/', desc:'codori-preview を ひらくよ'}
+];
 
 /* ---------- state ---------- */
 let tasks = loadTasks();
@@ -814,6 +837,7 @@ function ensureTaskShape(t){
     note: t.note || '',
     startDate: t.startDate || dateToYMD(new Date(created)),
     deadline: t.deadline || '',
+    link: t.link || '',
     priority: ['high','medium','low'].includes(t.priority) ? t.priority : 'medium',
     done,
     everDone: t.everDone !== undefined ? !!t.everDone : done,
@@ -1125,6 +1149,7 @@ function renderHome(){
     : `${st.line}　いまは おしごと ゼロ！えらい✨`;
 
   renderNextAction();
+  renderPlayApps();
   renderHomeToday();
   renderQuests();
 }
@@ -1182,9 +1207,39 @@ function renderHomeToday(){
       <input type="checkbox" class="mini-check" ${t.done?'checked':''} onchange="toggleDone(${t.id}, event)">
       <div class="mini-name ${t.done?'done':''}">${escapeHtml(t.name)}</div>
       ${dl}
+      ${t.link?`<a class="mini-focus" href="${escapeAttr(t.link)}" target="_blank" rel="noopener">🔗</a>`:''}
       <button class="mini-focus" onclick="openFocus(${t.id})">⏱️</button>
     </div>`;
   }).join('');
+}
+
+function renderPlayApps(){
+  const el=document.getElementById('play-area');
+  if(!el) return;
+  el.innerHTML=EXTERNAL_APPS.map(a=>`
+    <div class="play-row">
+      <div class="play-emoji">${a.emoji}</div>
+      <div class="play-mid">
+        <div class="play-name">${escapeHtml(a.name)}</div>
+        <div class="play-desc">${escapeHtml(a.desc)}</div>
+      </div>
+      <button class="play-add" onclick="addAppAsTask('${a.id}')">＋タスク</button>
+      <a class="play-open" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">▶ ひらく</a>
+    </div>`).join('');
+}
+function addAppAsTask(id){
+  const a=EXTERNAL_APPS.find(x=>x.id===id);
+  if(!a) return;
+  const exists=tasks.find(t=>!t.done && t.link===a.url);
+  if(exists){ toast('もう やることに あるよ！','🐦'); setView('list'); return; }
+  const now=Date.now();
+  const task=ensureTaskShape({id:now, name:`${a.emoji} ${a.name}`, note:a.desc, link:a.url, startDate:todayYMD(), deadline:'', priority:'medium', done:false, subtasks:[], history:[], createdAt:now, updatedAt:now});
+  recordHistory(task,'app'); tasks.push(task);
+  bumpQuest('added');
+  save(); saveGame();
+  toast(`「${a.name}」を やることに いれたよ！${cheer()}`, a.emoji);
+  vibrate(10);
+  render();
 }
 
 function renderQuests(){
@@ -1274,6 +1329,7 @@ function renderList(){
           ${openSubtaskTaskId===t.id?renderSubtaskBox(t):''}
         </div>
         <div class="task-act">
+          ${t.link?`<a class="tbtn open" href="${escapeAttr(t.link)}" target="_blank" rel="noopener">🔗</a>`:''}
           <button class="tbtn focus" onclick="openFocus(${t.id})">⏱️</button>
           <button class="tbtn sub" onclick="toggleSubtaskPanel(${t.id})">🐣</button>
           <button class="tbtn edit" onclick="openEditForm(${t.id})">✏️</button>
