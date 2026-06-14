@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="しままる">
 <meta name="theme-color" content="#fde8f2">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
 <title>しままるのおしごとメモ</title>
 <style>
 :root{
@@ -313,6 +317,11 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
 .top-tools{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .ghost-btn{padding:10px 12px;background:#fff;border:2px solid #f3d5e3;color:#c15d87;border-radius:12px;font-family:inherit;font-weight:800;cursor:pointer}
 .install-hint{font-size:12px;color:#a56b84;line-height:1.6}
+.remind-row{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+.remind-toggle{font-weight:800;color:var(--plum);font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.remind-toggle input{width:20px;height:20px;accent-color:var(--pink);cursor:pointer}
+#remind-time{border:2px solid #f4c0dc;border-radius:10px;padding:8px 10px;font-family:inherit;font-size:14px;outline:none;color:var(--ink)}
+#remind-time:focus{border-color:var(--pink)}
 
 /* ====== zukan (collection) ====== */
 .dex-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
@@ -569,9 +578,21 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
         <button class="ghost-btn" onclick="resetData()">🧹 ぜんさくじょ</button>
       </div>
       <input type="file" id="import-file" accept=".json,application/json" class="hidden">
-      <div class="install-hint">
+
+      <div class="remind-row">
+        <label class="remind-toggle">
+          <input type="checkbox" id="remind-toggle" onchange="toggleRemind()"> ⏰ まいにち リマインド
+        </label>
+        <input type="time" id="remind-time" onchange="setRemindTime()">
+      </div>
+      <div class="install-hint" style="margin-top:8px">
+        きめた時間に「きょうの おしごと」を おしらせ。iPhoneは アプリを開いたときに、
+        Android（ホーム画面に追加したPWA）は 定刻でも 通知できるよ。※通知許可が ひつようだよ。
+      </div>
+
+      <div class="install-hint" style="margin-top:10px">
         iPhoneでは Safariで開いて 共有 → ホーム画面に追加 で アプリみたいに使えるよ。
-        データは この端末のブラウザの中に ほぞんされるよ。
+        データは この端末のブラウザの中に ほぞんされるよ。オフラインでも ひらけるよ。
       </div>
     </div>
   </div>
@@ -865,6 +886,7 @@ function defaultGame(){
     placedDecor:[],
     stats:{tasksDone:0, focusDone:0},
     daily:null,
+    settings:{remindEnabled:false, remindTime:'09:00', lastRemindDate:''},
     lastSeen:''
   };
 }
@@ -879,6 +901,7 @@ function loadGame(){
       streak:{...d.streak, ...(p.streak||{})},
       owned:{acc:(p.owned&&p.owned.acc)||[], decor:(p.owned&&p.owned.decor)||[]},
       stats:{...d.stats, ...(p.stats||{})},
+      settings:{...d.settings, ...(p.settings||{})},
       hatched:Array.isArray(p.hatched)?p.hatched:[],
       placedDecor:Array.isArray(p.placedDecor)?p.placedDecor:[]
     };
@@ -2043,9 +2066,77 @@ function togglePlaceDecor(id){
 function requestNotifications(){
   if(!('Notification' in window)){ alert('このブラウザでは 通知に たいおうしていないみたい。'); return; }
   Notification.requestPermission().then(result=>{
-    if(result==='granted'){ alert('通知を きょかしたよ！'); maybeNotifySoon(); }
-    else alert('通知は まだ きょかされていないよ。');
+    if(result==='granted'){
+      alert('通知を きょかしたよ！');
+      maybeNotifySoon();
+      checkReminderNow();
+      if(g.settings.remindEnabled) registerPeriodicReminder();
+    } else {
+      alert('通知は まだ きょかされていないよ。');
+    }
   });
+}
+
+/* ---- まいにちリマインド（best-effort） ---- */
+function applyRemindUI(){
+  const tg=document.getElementById('remind-toggle');
+  const tm=document.getElementById('remind-time');
+  if(tg) tg.checked = !!g.settings.remindEnabled;
+  if(tm) tm.value = g.settings.remindTime || '09:00';
+}
+function toggleRemind(){
+  const on=document.getElementById('remind-toggle').checked;
+  g.settings.remindEnabled=on;
+  saveGame();
+  if(on){
+    if(('Notification' in window) && Notification.permission==='default'){
+      Notification.requestPermission().then(r=>{ if(r==='granted'){ checkReminderNow(); registerPeriodicReminder(); } });
+    }else if(('Notification' in window) && Notification.permission==='granted'){
+      registerPeriodicReminder(); checkReminderNow();
+    }
+    toast('まいにち リマインドを オンにしたよ⏰','🐦');
+  }else{
+    toast('リマインドを オフにしたよ','🐦');
+  }
+}
+function setRemindTime(){
+  g.settings.remindTime=document.getElementById('remind-time').value || '09:00';
+  saveGame();
+  toast(`リマインドを ${g.settings.remindTime} に セットしたよ`,'⏰');
+}
+function checkReminderNow(){
+  const s=g.settings;
+  if(!s || !s.remindEnabled) return;
+  if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const today=todayYMD();
+  if(s.lastRemindDate===today) return;
+  const now=new Date();
+  const hhmm=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  if(hhmm < (s.remindTime||'09:00')) return;
+  const active=tasks.filter(t=>!t.done).length;
+  s.lastRemindDate=today; saveGame();
+  const body=active ? `ジュリリ！きょうの おしごと ${active}件、いっしょに みてみよ🐦` : 'ジュリリ！きょうも いい一日に しよ🐦';
+  try{ new Notification('しままるから おしらせ', {body, icon:'./icon-192.png'}); }catch(e){}
+}
+async function registerPeriodicReminder(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    const reg=await navigator.serviceWorker.ready;
+    if(reg && 'periodicSync' in reg){
+      let state='denied';
+      try{ state=(await navigator.permissions.query({name:'periodic-background-sync'})).state; }catch(e){}
+      if(state==='granted'){
+        await reg.periodicSync.register('shimamaru-daily', {minInterval:24*60*60*1000});
+      }
+    }
+  }catch(e){}
+}
+function registerServiceWorker(){
+  if(!('serviceWorker' in navigator)) return;
+  if(!String(location.protocol).startsWith('http')) return; // file:// では不可
+  navigator.serviceWorker.register('./sw.js').then(()=>{
+    if(g.settings && g.settings.remindEnabled) registerPeriodicReminder();
+  }).catch(()=>{});
 }
 function maybeNotifySoon(){
   if(!('Notification' in window)||Notification.permission!=='granted') return;
@@ -2100,6 +2191,12 @@ tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); })
   g.lastSeen=todayYMD();
   saveGame();
   render();
+
+  applyRemindUI();
+  registerServiceWorker();
+  checkReminderNow();
+  setInterval(checkReminderNow, 60000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkReminderNow(); });
 })();
 </script>
 </body>
