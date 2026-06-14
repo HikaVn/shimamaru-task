@@ -254,6 +254,10 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
 .btn-cancel{padding:13px 16px;background:#f0f4f8;color:var(--rose);border:none;border-radius:13px;font-size:14px;cursor:pointer;font-family:inherit;font-weight:800}
 .btn-open-add{width:100%;padding:15px 0;background:linear-gradient(135deg,#e8629a,#f4a0c4);color:#fff;border:none;border-radius:16px;font-size:16px;cursor:pointer;box-shadow:0 4px 16px rgba(213,91,155,.3);font-family:inherit;font-weight:900}
 .priority-row{display:flex;gap:8px;margin-top:6px}
+.weekday-row{display:flex;gap:6px;flex-wrap:wrap}
+.wd-chip{border:2px solid #f4c0dc;background:#fff;color:#c9849f;border-radius:11px;width:38px;height:40px;font-family:inherit;font-weight:800;font-size:14px;cursor:pointer;padding:0;transition:all .12s}
+.wd-chip.on{background:var(--pink);color:#fff;border-color:var(--pink)}
+.wd-chip:active{transform:scale(.92)}
 .priority-btn{flex:1;padding:9px 4px;border-radius:12px;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:all .15s;border:2px solid #e0eaf4;background:#fff;color:#aaa}
 
 /* ====== calendar (kept) ====== */
@@ -859,6 +863,10 @@ function ensureTaskShape(t){
     startDate: t.startDate || dateToYMD(new Date(created)),
     deadline: t.deadline || '',
     link: t.link || '',
+    repeat: (t.repeat && ['none','daily','weekly'].includes(t.repeat.type))
+      ? {type:t.repeat.type, days:Array.isArray(t.repeat.days)?t.repeat.days.filter(d=>d>=0&&d<=6):[]}
+      : {type:'none', days:[]},
+    repeatLastDone: t.repeatLastDone || '',
     priority: ['high','medium','low'].includes(t.priority) ? t.priority : 'medium',
     done,
     everDone: t.everDone !== undefined ? !!t.everDone : done,
@@ -1125,6 +1133,16 @@ function onSubtaskCompleted(srcEl){
   floatGain(srcEl, '+4XP', '#7d5bd9');
   vibrate(10);
 }
+// くりかえしタスク完了：毎日ごほうび（連続記録・ミッションに加算、たまに孵化）
+function onRecurringDone(task, srcEl){
+  markActiveToday();
+  const xp=12, coins=2;
+  addXp(xp); addCoins(coins); g.stats.tasksDone++; bumpQuest('tasksDone');
+  floatGain(srcEl, `+${xp}XP`, '#3aa55f');
+  vibrate(16);
+  if(Math.random()<0.33){ confetti(16); const {sp,tier}=hatchEgg(task); showHatch(sp,tier,coins,xp); }
+  else { confetti(10); toast(`${cheer()} まいにちタスク かんりょう！`, '🔁'); }
+}
 
 /* =========================================================
    RENDER: HUD + HOME
@@ -1179,7 +1197,7 @@ function renderHome(){
 
 function renderNextAction(){
   const area=document.getElementById('next-action-area');
-  const act=sortTasks(tasks.filter(t=>!t.done));
+  const act=sortTasks(tasks.filter(isActiveNow));
   if(!act.length){ area.innerHTML=''; return; }
   if(homeNextIndex>=act.length) homeNextIndex=0;
   const t=act[homeNextIndex];
@@ -1202,7 +1220,7 @@ function renderNextAction(){
     </div>`;
 }
 function skipNext(){
-  const act=tasks.filter(t=>!t.done);
+  const act=tasks.filter(isActiveNow);
   if(act.length<=1) return;
   homeNextIndex=(homeNextIndex+1)%act.length;
   renderNextAction();
@@ -1212,13 +1230,13 @@ function renderHomeToday(){
   const el=document.getElementById('home-today');
   const today=todayYMD();
   const list=sortTasks(tasks.filter(t=>{
-    if(t.done) return false;
+    if(!isActiveNow(t)) return false;
     if(!t.deadline) return false;
     return getDaysLeft(t.deadline)<=1;        // 今日・あした・延滞
   })).slice(0,6);
   let pool=list;
   if(!pool.length){
-    pool=sortTasks(tasks.filter(t=>!t.done)).slice(0,4);
+    pool=sortTasks(tasks.filter(isActiveNow)).slice(0,4);
   }
   if(!pool.length){
     el.innerHTML='<div class="muted" style="text-align:center;padding:14px 0">🎉 きょうは よていなし！のんびりしてね🐦</div>';
@@ -1229,6 +1247,7 @@ function renderHomeToday(){
     return `<div class="mini-task">
       <input type="checkbox" class="mini-check" ${t.done?'checked':''} onchange="toggleDone(${t.id}, event)">
       <div class="mini-name ${t.done?'done':''}">${escapeHtml(t.name)}</div>
+      ${isRecurring(t)?'<span class="mini-badge" style="background:#eef9f1;color:#3aa55f">🔁</span>':''}
       ${dl}
       ${t.link?`<a class="mini-focus" href="${escapeAttr(t.link)}" target="_blank" rel="noopener">🔗</a>`:''}
       <button class="mini-focus" onclick="openFocus(${t.id})">⏱️</button>
@@ -1324,13 +1343,47 @@ function sortTasks(arr){
     return parseYMD(a.deadline)-parseYMD(b.deadline);
   });
 }
+
+/* ---- くりかえしタスク（ルーティン） ---- */
+function isRecurring(t){ return t.repeat && t.repeat.type && t.repeat.type!=='none'; }
+function repeatLabel(rep){
+  if(!rep || rep.type==='none') return '';
+  if(rep.type==='daily') return 'まいにち';
+  if(rep.type==='weekly'){
+    const ds=(rep.days||[]).slice().sort((a,b)=>a-b);
+    if(ds.length===0) return '毎週';
+    if(ds.length===7) return 'まいにち';
+    return '毎週'+ds.map(d=>WEEKDAYS[d]).join('');
+  }
+  return '';
+}
+function isScheduledToday(t){
+  if(!isRecurring(t)) return true;
+  if(t.repeat.type==='daily') return true;
+  if(t.repeat.type==='weekly') return (t.repeat.days||[]).includes(new Date().getDay());
+  return true;
+}
+// きょう やるべき（未完了 かつ きょうの予定）タスクか
+function isActiveNow(t){ return !t.done && isScheduledToday(t); }
+// 日付が変わったら、くりかえしタスクを「またやる」状態へ戻す
+function resetRecurring(){
+  const today=todayYMD(); let changed=false;
+  tasks.forEach(t=>{
+    if(isRecurring(t) && t.repeatLastDone && t.repeatLastDone!==today && t.done){
+      t.done=false;
+      if(Array.isArray(t.subtasks)) t.subtasks.forEach(s=>{ s.done=false; });
+      changed=true;
+    }
+  });
+  if(changed) save();
+}
 function renderList(){
   const filtered=sortTasks(tasks.filter(t=>{
-    if(filter==='active') return !t.done;
+    if(filter==='active') return isActiveNow(t);
     if(filter==='done') return t.done;
     return true;
   }));
-  document.getElementById('task-count').textContent=tasks.filter(t=>!t.done).length+'件 のこってるよ';
+  document.getElementById('task-count').textContent=tasks.filter(isActiveNow).length+'件 のこってるよ';
   const list=document.getElementById('task-list');
   if(!filtered.length){
     list.innerHTML='<div class="task-empty">🐦 ジュリリ！タスクが ないよ〜<br>下の「＋」から ついかしてね</div>';
@@ -1347,6 +1400,7 @@ function renderList(){
             <span class="priority-badge" style="background:${PRIORITIES[t.priority||'medium'].bg};color:${PRIORITIES[t.priority||'medium'].color}">${PRIORITIES[t.priority||'medium'].label}</span>
             <span class="progress-pill">しんちょく ${progress}%</span>
             ${deadlineBadge(t.deadline)}
+            ${isRecurring(t)?`<span class="mini-badge2" style="background:#eef9f1;color:#3aa55f">🔁 ${repeatLabel(t.repeat)}</span>`:''}
             <span class="mini-badge2" style="background:#fff7e8;color:#c98b20">🐣 ${t.subtasks.length}</span>
           </div>
           ${openSubtaskTaskId===t.id?renderSubtaskBox(t):''}
@@ -1388,6 +1442,17 @@ function renderList(){
               <option value="medium" ${(!current||current?.priority==='medium')?'selected':''}>🟡 ふつう</option>
               <option value="low" ${(current?.priority==='low')?'selected':''}>🟢 低い</option>
             </select>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label class="form-label">🔁 くりかえし</label>
+          <select class="form-select" id="form-repeat" style="margin-bottom:8px" onchange="onRepeatTypeChange()">
+            <option value="none" ${(!current||current.repeat.type==='none')?'selected':''}>なし（1回だけ）</option>
+            <option value="daily" ${(current&&current.repeat.type==='daily')?'selected':''}>まいにち</option>
+            <option value="weekly" ${(current&&current.repeat.type==='weekly')?'selected':''}>まいしゅう（曜日をえらぶ）</option>
+          </select>
+          <div id="form-weekdays" class="weekday-row" style="display:${(current&&current.repeat.type==='weekly')?'flex':'none'}">
+            ${WEEKDAYS.map((w,i)=>`<button type="button" class="wd-chip ${(current&&current.repeat.days&&current.repeat.days.includes(i))?'on':''}" data-day="${i}" onclick="toggleWeekday(this)">${w}</button>`).join('')}
           </div>
         </div>
         <div class="form-row-btn">
@@ -1706,20 +1771,25 @@ function setFilter(f){
    ========================================================= */
 function toggleDone(id, ev){
   const srcEl = ev && ev.target ? ev.target : null;
-  let completedTask=null, recompleted=false;
+  let completedTask=null, recompleted=false, recurringDone=null;
   tasks=tasks.map(t=>{
     if(t.id!==id) return t;
     const nextDone=!t.done;
     const updated={...t, done:nextDone, updatedAt:Date.now()};
+    const rec=isRecurring(updated);
     if(updated.subtasks.length===0) recordHistory(updated,'toggleDone');
     if(nextDone){
-      if(!updated.everDone){ updated.everDone=true; completedTask=updated; }
+      if(rec){ updated.repeatLastDone=todayYMD(); recurringDone=updated; }
+      else if(!updated.everDone){ updated.everDone=true; completedTask=updated; }
       else { recompleted=true; completedTask=updated; }
+    } else if(rec){
+      updated.repeatLastDone='';   // 取り消し→きょう また やる
     }
     return updated;
   });
   save();
-  if(completedTask && !recompleted) onTaskCompleted(completedTask, srcEl);
+  if(recurringDone) onRecurringDone(recurringDone, srcEl);
+  else if(completedTask && !recompleted) onTaskCompleted(completedTask, srcEl);
   else if(completedTask && recompleted) onTaskRecompleted(completedTask, srcEl);
   saveGame();
   render();
@@ -1733,20 +1803,37 @@ function deleteTask(id){
 function openForm(){ addingForm=true; editingId=null; renderList(); }
 function openEditForm(id){ addingForm=true; editingId=id; setView('list'); setTimeout(renderList,0); }
 function closeForm(){ addingForm=false; editingId=null; renderList(); }
+function onRepeatTypeChange(){
+  const v=document.getElementById('form-repeat').value;
+  const wd=document.getElementById('form-weekdays');
+  if(wd) wd.style.display=(v==='weekly')?'flex':'none';
+}
+function toggleWeekday(btn){ btn.classList.toggle('on'); }
+function readFormRepeat(){
+  const sel=document.getElementById('form-repeat');
+  const type=sel?sel.value:'none';
+  let days=[];
+  if(type==='weekly'){
+    days=[...document.querySelectorAll('#form-weekdays .wd-chip.on')].map(b=>Number(b.dataset.day));
+    if(!days.length) days=[new Date().getDay()];   // 曜日未選択なら今日だけ
+  }
+  return {type, days};
+}
 function submitForm(){
   const name=document.getElementById('form-name').value.trim();
   const note=document.getElementById('form-note').value.trim();
   const startDate=document.getElementById('form-startDate').value||todayYMD();
   const deadline=document.getElementById('form-deadline').value;
   const priority=document.getElementById('form-priority').value;
+  const repeat=readFormRepeat();
   if(!name) return;
   if(editingId){
     tasks=tasks.map(t=>{ if(t.id!==editingId) return t;
-      const updated={...t, name, note, startDate, deadline, priority, updatedAt:Date.now()};
+      const updated={...t, name, note, startDate, deadline, priority, repeat, updatedAt:Date.now()};
       recordHistory(updated,'edit'); return updated; });
   }else{
     const now=Date.now();
-    const task=ensureTaskShape({id:now, name, note, startDate, deadline, priority, done:false, subtasks:[], history:[], createdAt:now, updatedAt:now});
+    const task=ensureTaskShape({id:now, name, note, startDate, deadline, priority, repeat, done:false, subtasks:[], history:[], createdAt:now, updatedAt:now});
     recordHistory(task,'create'); tasks.push(task);
     bumpQuest('added'); saveGame();
   }
@@ -2184,6 +2271,7 @@ tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); })
 (function init(){
   // streak / daily handling
   refreshStreakOnLoad();
+  resetRecurring();
   ensureDaily();
   // first ever launch → start streak today gently? no, start on first completion.
   if(g._streakBroke){ setTimeout(()=>toast('れんぞくは とぎれたけど だいじょうぶ！また きょうから はじめよ🐦','🌱'), 700); g._streakBroke=false; }
