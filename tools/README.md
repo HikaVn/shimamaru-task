@@ -37,3 +37,23 @@ node tools/make-icons.js icon-master.png .
 透明部分は `#fde8f2` に合成して不透明化します（maskable向け）。
 
 対応PNG: 8-bit / colorType 0,2,3,4,6 / 非インターレース。
+
+## 参考: AIで生成する（OpenAI Imagegen / gpt-image-1）
+
+`tools/gen-icon-openai.js` は OpenAI 画像API（Codex Imagegen と同じ gpt-image-1）で
+`icon-master.png` を生成する依存ゼロのスクリプトです。
+
+```bash
+export OPENAI_API_KEY=sk-...      # 環境変数で渡す（チャットに貼らない）
+node tools/gen-icon-openai.js     # icon-master.png を生成
+node tools/make-icons.js icon-master.png .   # 各サイズへ変換
+```
+
+必要条件:
+- 環境変数 `OPENAI_API_KEY`
+- ネットワーク egress 許可リストに `api.openai.com` を追加
+  （未許可だと `403 host_not_allowed`。Claude Code on the web の環境設定で許可します:
+   https://code.claude.com/docs/en/claude-code-on-the-web ）
+
+`node tools/gen-icon-openai.js --dry-run` で、APIに送る内容だけ確認できます。
+
