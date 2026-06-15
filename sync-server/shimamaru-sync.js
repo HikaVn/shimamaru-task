@@ -120,6 +120,10 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req);
     let j; try { j = JSON.parse(body); } catch (e) { return sendJSON(res, 400, { ok: false, error: 'invalid json' }); }
     if (!Array.isArray(j.tasks)) return sendJSON(res, 400, { ok: false, error: 'tasks[] required' });
+    // 楽観的並行制御: baseRev が現在revと不一致なら 409 + 最新stateを返す（baseRev省略時は無条件）
+    if (typeof j.baseRev === 'number' && j.baseRev !== rev) {
+      return sendJSON(res, 409, { ok: false, error: 'conflict', rev, tasks: state.tasks, game: state.game });
+    }
     state.tasks = j.tasks; if (j.game) state.game = j.game;
     rev++; persist();
     broadcast(req.headers['x-client-id'] || null);

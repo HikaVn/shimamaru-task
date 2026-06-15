@@ -52,7 +52,7 @@ SHIMAMARU_DATA=$PWD/shimamaru-data.json node mcp-server/shimamaru-mcp.js
 |---|---|---|
 | GET | `/api/health` | `{ ok, rev }` |
 | GET | `/api/state` | `{ rev, tasks, game }` |
-| PUT/POST | `/api/state` | `{ tasks, game }` を保存し他クライアントへ配信。`X-Client-Id` で自分宛て除外 |
+| PUT/POST | `/api/state` | `{ tasks, game, baseRev? }` を保存し他クライアントへ配信。`baseRev` が現在revと不一致なら **409 ＋ 最新state**（楽観的並行制御。MCPのHTTP直結が利用）。`X-Client-Id` で自分宛て除外 |
 | GET | `/events` | Server-Sent Events。`event: state` で `{ rev, tasks, game }` をプッシュ |
 | GET | `/*` | 静的配信（`/` → `index.html`、アプリ本体・アイコン等） |
 

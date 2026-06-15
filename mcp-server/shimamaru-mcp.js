@@ -159,7 +159,7 @@ const handlers = {
     if (!a.name) throw new Error('name は必須です');
     const repeat = a.repeat && a.repeat !== 'none' ? { type: a.repeat, days: a.repeat === 'weekly' ? (Array.isArray(a.weekdays) && a.weekdays.length ? a.weekdays : [new Date().getDay()]) : [] } : { type: 'none', days: [] };
     const t = ensureTask({ name: a.name, note: a.note || '', deadline: a.deadline || '', startDate: a.startDate || todayYMD(), priority: a.priority || 'medium', repeat });
-    store.tasks.push(t); save();
+    store.tasks.push(t);
     return `追加したよ🐦\n${taskLine(t)}`;
   },
   complete_task(a) {
@@ -167,7 +167,7 @@ const handlers = {
     if (t.done && !isRecurring(t)) return `すでに完了しているよ: ${t.name}`;
     t.done = true; t.everDone = true; t.updatedAt = Date.now();
     if (isRecurring(t)) t.repeatLastDone = todayYMD();
-    awardCompletion(t); save();
+    awardCompletion(t);
     const li = levelInfo(store.game.xp);
     return `完了！🎉 ${t.name}\n（Lv${li.level}・🌰${store.game.coins}・🔥${store.game.streak.count}日）`;
   },
@@ -182,19 +182,19 @@ const handlers = {
     if (a.note !== undefined) t.note = a.note;
     if (a.deadline !== undefined) t.deadline = a.deadline;
     if (a.priority !== undefined && PRIORITIES.includes(a.priority)) t.priority = a.priority;
-    t.updatedAt = Date.now(); save();
+    t.updatedAt = Date.now();
     return `更新したよ:\n${taskLine(t)}`;
   },
   delete_task(a) {
     const t = findTask(a.task); if (!t) throw new Error('タスクが見つかりません: ' + a.task);
-    store.tasks = store.tasks.filter(x => x.id !== t.id); save();
+    store.tasks = store.tasks.filter(x => x.id !== t.id);
     return `削除したよ: ${t.name}`;
   },
   add_subtask(a) {
     const t = findTask(a.task); if (!t) throw new Error('タスクが見つかりません: ' + a.task);
     if (!a.name) throw new Error('name は必須です');
     t.subtasks.push({ id: Date.now() + Math.floor(Math.random() * 100000), name: a.name, done: false, everDone: false, createdAt: Date.now() });
-    t.updatedAt = Date.now(); save();
+    t.updatedAt = Date.now();
     return `ひなタスクを追加したよ🐣: ${a.name}（親: ${t.name}）`;
   },
   complete_subtask(a) {
@@ -203,7 +203,7 @@ const handlers = {
     if (!st) throw new Error('ひなタスクが見つかりません: ' + a.subtask);
     st.done = true; st.everDone = true;
     if (t.subtasks.length && t.subtasks.every(s => s.done)) { if (!t.everDone) { t.everDone = true; } t.done = true; awardCompletion(t); }
-    t.updatedAt = Date.now(); save();
+    t.updatedAt = Date.now();
     return `ひなタスク完了🐣: ${st.name}（進捗 ${taskProgress(t)}%）`;
   },
   get_stats() {
@@ -220,39 +220,89 @@ const handlers = {
   }
 };
 
+/* ---------- data layer: file or HTTP(sync-server) ----------
+ * SHIMAMARU_SYNC_URL を指定すると、ファイルではなく同期サーバへ HTTP 直結。
+ * 各変更は「GET最新 → 変更 → baseRev付きPUT → 409なら再試行」の
+ * 楽観的並行制御で、ブラウザ等との read-modify-write 競合を防ぎます。
+ */
+const SYNC_URL = process.env.SHIMAMARU_SYNC_URL || '';
+let currentRev = null;
+const { URL } = require('url');
+function httpJSON(method, base, apiPath, body) {
+  return new Promise((resolve, reject) => {
+    let u; try { u = new URL(apiPath, base); } catch (e) { return reject(e); }
+    const lib = u.protocol === 'https:' ? require('https') : require('http');
+    const data = body ? Buffer.from(JSON.stringify(body)) : null;
+    const req = lib.request({ method, hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search, headers: Object.assign({ 'Content-Type': 'application/json', 'X-Client-Id': 'mcp' }, data ? { 'Content-Length': data.length } : {}) }, res => {
+      let b = ''; res.on('data', c => b += c); res.on('end', () => { let j = null; try { j = JSON.parse(b); } catch (e) {} resolve({ status: res.statusCode, json: j }); });
+    });
+    req.on('error', reject);
+    if (data) req.write(data);
+    req.end();
+  });
+}
+async function loadState() {
+  if (SYNC_URL) {
+    const { status, json } = await httpJSON('GET', SYNC_URL, '/api/state');
+    if (status !== 200 || !json) throw new Error('同期サーバから取得できません (' + status + ')');
+    store.tasks = (json.tasks || []).map(ensureTask);
+    store.game = Object.assign(defaultGame(), json.game || {});
+    currentRev = json.rev;
+  } else { load(); }
+}
+async function saveState() {
+  if (SYNC_URL) {
+    const { status, json } = await httpJSON('PUT', SYNC_URL, '/api/state', { tasks: store.tasks, game: store.game, baseRev: currentRev });
+    if (status === 200) { currentRev = json && json.rev; return true; }
+    if (status === 409) { currentRev = json && json.rev; return false; }   // 競合 → 再試行
+    throw new Error('同期サーバに保存できません (' + status + ')');
+  } else { save(); return true; }
+}
+
 /* ---------- JSON-RPC over stdio (newline-delimited) ---------- */
 function send(msg) { process.stdout.write(JSON.stringify(msg) + '\n'); }
 function reply(id, result) { send({ jsonrpc: '2.0', id, result }); }
 function replyErr(id, code, message) { send({ jsonrpc: '2.0', id, error: { code, message } }); }
 
-function handle(msg) {
+const READONLY = new Set(['list_tasks', 'get_today', 'get_stats']);
+async function callTool(name, args) {
+  const fn = handlers[name];
+  if (!fn) return { content: [{ type: 'text', text: '不明なツール: ' + name }], isError: true };
+  try {
+    if (READONLY.has(name)) {
+      await loadState();
+      return { content: [{ type: 'text', text: String(fn(args)) }] };
+    }
+    for (let attempt = 0; attempt < 6; attempt++) {
+      await loadState();             // 最新を取得（HTTP時は rev も更新）
+      const text = fn(args);         // store を変更
+      if (await saveState()) return { content: [{ type: 'text', text: String(text) }] };
+      // 409 競合 → 最新で再試行
+    }
+    return { content: [{ type: 'text', text: '競合が続いたため保存できませんでした。もう一度お試しください。' }], isError: true };
+  } catch (e) {
+    return { content: [{ type: 'text', text: 'エラー: ' + (e && e.message || e) }], isError: true };
+  }
+}
+
+async function handle(msg) {
   const { id, method, params } = msg;
   const isReq = id !== undefined && id !== null;
-  if (method === 'initialize') {
-    return reply(id, { protocolVersion: (params && params.protocolVersion) || '2025-06-18', capabilities: { tools: {} }, serverInfo: SERVER_INFO });
-  }
-  if (method === 'notifications/initialized' || method === 'initialized') return; // notification
+  if (method === 'initialize') return reply(id, { protocolVersion: (params && params.protocolVersion) || '2025-06-18', capabilities: { tools: {} }, serverInfo: SERVER_INFO });
+  if (method === 'notifications/initialized' || method === 'initialized') return;
   if (method === 'ping') return reply(id, {});
   if (method === 'tools/list') return reply(id, { tools: TOOLS });
   if (method === 'resources/list') return reply(id, { resources: [] });
   if (method === 'prompts/list') return reply(id, { prompts: [] });
-  if (method === 'tools/call') {
-    const name = params && params.name;
-    const args = (params && params.arguments) || {};
-    const fn = handlers[name];
-    if (!fn) return reply(id, { content: [{ type: 'text', text: '不明なツール: ' + name }], isError: true });
-    try {
-      load(); // 最新の状態で（アプリの復元等と整合）
-      const text = fn(args);
-      return reply(id, { content: [{ type: 'text', text: String(text) }] });
-    } catch (e) {
-      return reply(id, { content: [{ type: 'text', text: 'エラー: ' + (e && e.message || e) }], isError: true });
-    }
-  }
+  if (method === 'tools/call') return reply(id, await callTool(params && params.name, (params && params.arguments) || {}));
   if (isReq) return replyErr(id, -32601, 'Method not found: ' + method);
 }
 
-load();
+if (!SYNC_URL) load();
+let queue = Promise.resolve();   // ツール実行を直列化（load→変更→saveの一貫性）
+function enqueue(msg) {
+  queue = queue.then(() => handle(msg)).catch(e => { if (msg && msg.id != null) replyErr(msg.id, -32603, 'Internal error: ' + (e && e.message)); });
+}
 let buf = '';
 process.stdin.setEncoding('utf8');
 process.stdin.on('data', chunk => {
@@ -262,8 +312,8 @@ process.stdin.on('data', chunk => {
     const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
     if (!line.trim()) continue;
     let msg; try { msg = JSON.parse(line); } catch (e) { continue; }
-    try { handle(msg); } catch (e) { if (msg && msg.id != null) replyErr(msg.id, -32603, 'Internal error: ' + (e && e.message)); }
+    enqueue(msg);
   }
 });
 process.stdin.on('end', () => process.exit(0));
-process.stderr.write(`[shimamaru-mcp] ready. data=${DATA_PATH}\n`);
+process.stderr.write(`[shimamaru-mcp] ready. mode=${SYNC_URL ? 'http:' + SYNC_URL : 'file:' + DATA_PATH}\n`);
