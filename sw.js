@@ -1,5 +1,5 @@
 /* しままる Service Worker  ―  オフライン対応 + 毎日リマインド(best-effort) */
-const CACHE = 'shimamaru-v1';
+const CACHE = 'shimamaru-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -35,6 +35,8 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // 外部アプリ等はそのまま
+  // リアルタイム同期のAPI/SSEはキャッシュせずそのまま通す
+  if (url.pathname.indexOf('/api/') !== -1 || url.pathname.endsWith('/events')) return;
   e.respondWith(
     caches.match(req).then(cached => {
       const net = fetch(req).then(res => {

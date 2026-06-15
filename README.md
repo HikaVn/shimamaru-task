@@ -19,3 +19,8 @@ UIには明記しないものの、短期報酬・進捗の可視化・マイク
 ## MCPサーバ（`mcp-server/`）
 外部AI（Claude Desktop / Claude Code / Codex）から、しままるのタスクを操作できる MCP サーバ。
 詳細は [`mcp-server/README.md`](mcp-server/README.md) を参照。
+
+## リアルタイム同期サーバ（`sync-server/`）
+アプリ本体を配信しつつ、ブラウザ↔AI(MCP) を **リアルタイム同期**する軽量サーバ（依存なし）。
+同期サーバから配信するとアプリが自動で同期モードになり、AIの操作も即ブラウザへ反映されます。
+詳細は [`sync-server/README.md`](sync-server/README.md) を参照。

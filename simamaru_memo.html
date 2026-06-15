@@ -850,8 +850,8 @@ function loadTasks(){
   try{ const raw=localStorage.getItem(STORAGE_KEY); if(!raw) return []; const p=JSON.parse(raw); return Array.isArray(p)?p:[]; }
   catch(e){ return []; }
 }
-function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); }
-function saveGame(){ localStorage.setItem(GAME_KEY, JSON.stringify(g)); }
+function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks)); schedulePush(); }
+function saveGame(){ localStorage.setItem(GAME_KEY, JSON.stringify(g)); schedulePush(); }
 
 function ensureTaskShape(t){
   const created = t.createdAt || Date.now();
@@ -2264,6 +2264,60 @@ function resetData(){
 }
 
 /* =========================================================
+   リアルタイム同期（任意）: 同期サーバ(sync-server)配信時のみ有効。
+   GitHub Pages等の単体配信では fetch が失敗してオフライン(localStorage)動作。
+   ========================================================= */
+let syncMode=false, applyingRemote=false, syncRev=0, _pushTimer=null;
+const SYNC_CLIENT_ID='c'+Math.random().toString(36).slice(2,9);
+function normalizeGame(p){
+  const d=defaultGame();
+  return {...d, ...p,
+    streak:{...d.streak, ...((p&&p.streak)||{})},
+    owned:{acc:(p&&p.owned&&p.owned.acc)||[], decor:(p&&p.owned&&p.owned.decor)||[]},
+    stats:{...d.stats, ...((p&&p.stats)||{})},
+    settings:{...d.settings, ...((p&&p.settings)||{})},
+    hatched:Array.isArray(p&&p.hatched)?p.hatched:[],
+    placedDecor:Array.isArray(p&&p.placedDecor)?p.placedDecor:[]
+  };
+}
+function applyRemoteState(d){
+  if(!d || typeof d.rev!=='number' || d.rev<=syncRev) return;
+  syncRev=d.rev;
+  applyingRemote=true;
+  if(Array.isArray(d.tasks)) tasks=d.tasks.map(ensureTaskShape);
+  if(d.game) g=normalizeGame(d.game);
+  save(); saveGame();              // applyingRemote中は push しない
+  applyingRemote=false;
+  render();
+}
+function schedulePush(){
+  if(!syncMode || applyingRemote) return;
+  clearTimeout(_pushTimer);
+  _pushTimer=setTimeout(pushState, 250);
+}
+function pushState(){
+  if(!syncMode) return;
+  fetch('./api/state',{method:'PUT',headers:{'Content-Type':'application/json','X-Client-Id':SYNC_CLIENT_ID},body:JSON.stringify({tasks, game:g})})
+    .then(r=>r.ok?r.json():null).then(d=>{ if(d&&typeof d.rev==='number') syncRev=d.rev; }).catch(()=>{});
+}
+function initSync(){
+  if(typeof fetch!=='function') return;
+  fetch('./api/health',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(h=>{
+    if(!h || !h.ok) return;
+    syncMode=true;
+    return fetch('./api/state',{cache:'no-store'}).then(r=>r.json()).then(d=>{
+      if((!d.tasks||d.tasks.length===0) && tasks.length>0){ syncRev=d.rev||0; pushState(); } // ローカル優先で初期投入
+      else applyRemoteState(d);
+      try{
+        const es=new EventSource('./events');
+        es.addEventListener('state', ev=>{ try{ applyRemoteState(JSON.parse(ev.data)); }catch(e){} });
+      }catch(e){}
+      toast('リアルタイム同期 オン🔄','🔗');
+    });
+  }).catch(()=>{ /* 同期サーバなし → オフライン(localStorage) */ });
+}
+
+/* =========================================================
    INIT
    ========================================================= */
 tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); });
@@ -2282,6 +2336,7 @@ tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); })
 
   applyRemindUI();
   registerServiceWorker();
+  initSync();
   checkReminderNow();
   setInterval(checkReminderNow, 60000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkReminderNow(); });
