@@ -12,6 +12,11 @@ UIには明記しないものの、短期報酬・進捗の可視化・マイク
   - 外部アプリ連携（しままるタイピング / コドリ）、まいにちリマインド通知
 - iPhoneは Safari →「ホーム画面に追加」で アプリ風に使えます。
 
+## しままる漢字（`kanji/`）
+中1〜高3の漢字を**読めるようになる**冒険RPG（単一HTML・依存なし）。
+タスクアプリの「あそび・れんしゅう」からもリンク。詳細は [`kanji/README.md`](kanji/README.md)。
+公開URL: `https://hikavn.github.io/shimamaru-task/kanji/`
+
 ## ツール（`tools/`）
 - `make-icons.js` … 正方形PNGから PWA各サイズ（192/512/180/32）を生成（依存なし）
 - `gen-icon-openai.js` … OpenAI画像API(gpt-image-1)でアイコンを生成（要 APIキー＆egress許可）
