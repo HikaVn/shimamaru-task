@@ -1,0 +1,22 @@
+# しままるタスク MCP サーバ を Codex CLI から使う設定例
+# ~/.codex/config.toml に追記し、/ABS/PATH を実際の絶対パスに置き換えてください。
+# （Codex は手元のマシンでこのサーバを起動します。ファイルモードならネット接続は不要です。）
+
+# ───────────────────────────────────────────────
+# A) 基本：ファイルモード（アプリの 💾バックアップ / 📥ふくげん と相互運用）
+# ───────────────────────────────────────────────
+[mcp_servers.shimamaru]
+command = "node"
+args = ["/ABS/PATH/shimamaru-task/mcp-server/shimamaru-mcp.js"]
+env = { SHIMAMARU_DATA = "/ABS/PATH/shimamaru-task/shimamaru-data.json" }
+# startup_timeout_ms = 10000   # 必要なら起動タイムアウトを延長
+
+# ───────────────────────────────────────────────
+# B) リアルタイム同期サーバ併用（HTTP直結・競合に強い）
+#    先に `node sync-server/shimamaru-sync.js` を起動しておく。
+#    上の [mcp_servers.shimamaru] の env を次に差し替える:
+#
+#    env = { SHIMAMARU_SYNC_URL = "http://localhost:8787" }
+#
+#    → AIの操作がブラウザに即反映され、ブラウザとの競合も自動回避されます。
+# ───────────────────────────────────────────────
