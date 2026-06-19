@@ -196,7 +196,7 @@ body{
     <div class="hero">
       <img src="../shimamaru.jpg" class="hero-avatar" alt="しままる" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'🐦',style:'font-size:64px'}))">
       <div class="hero-title">しままる漢字</div>
-      <div class="hero-sub">中1〜高3の漢字を よむ ぼうけん 🗺️</div>
+      <div class="hero-sub">せいかつで つかう漢字を よめるように 🗺️</div>
       <div class="hero-line" id="hero-line"></div>
       <div class="overall">
         <div class="overall-bar"><i id="overall-bar"></i></div>
@@ -207,7 +207,7 @@ body{
     <div id="world-list"></div>
     <a class="back-link" href="https://hikavn.github.io/shimamaru-task/">🏠 しままるタスクへ もどる</a>
     <div class="footer">
-      ※ 学年の区分は目安。1ステージ＝10語、各ステージに かくれた おたから あり💎<br>
+      ※ レベルは やさしい→むずかしい の目安。1ステージ＝10語、各ステージに かくれた おたから あり💎<br>
       まちがえても だいじょうぶ。何度でも であって よめるようになろう！🐦
     </div>
   </div>
@@ -276,7 +276,7 @@ body{
 <script>
 /* =========================================================
    しままる漢字 ― ワールド→ステージの2階層・おたから付きRPG
-   ・やさしく罰しない／読みは熟語で出題（学年区分は目安）
+   ・やさしく罰しない／読みは熟語で出題（生活で つかう ことば／レベルは目安）
    ========================================================= */
 const TREASURES = {
   t1:{e:'🍀',n:'よつばのクローバー',d:'みどりの森の さいわい'},
@@ -305,7 +305,7 @@ const TREASURES = {
   t24:{e:'☄️',n:'ほうきぼし',d:'空を かける ほうきぼし'}
 };
 const WORLDS = [
-  { id:'w1', name:'みどりの森', emoji:'🌳', sub:'中1 そうとう', stages:[
+  { id:'w1', name:'みどりの森', emoji:'🌳', sub:'まいにち つかう ことば', stages:[
     { id:'w1-1', name:'もりの入口', tre:'t1', items:[
       {w:'自然',r:'しぜん',m:'やま・川などの しぜん'},{w:'友達',r:'ともだち',m:'なかよしの ともだち'},
       {w:'毎日',r:'まいにち',m:'まいにち'},{w:'元気',r:'げんき',m:'げんき・健康'},
@@ -331,7 +331,7 @@ const WORLDS = [
       {w:'放送',r:'ほうそう',m:'校内ほうそう など'},{w:'図工',r:'ずこう',m:'図画工作'},
       {w:'遠足',r:'えんそく',m:'おでかけ学習'},{w:'文化',r:'ぶんか',m:'文化・カルチャー'} ]}
   ]},
-  { id:'w2', name:'かぜの丘', emoji:'🍃', sub:'中2 そうとう', stages:[
+  { id:'w2', name:'かぜの丘', emoji:'🍃', sub:'学校・生活の ことば', stages:[
     { id:'w2-1', name:'丘のふもと', tre:'t4', items:[
       {w:'冒険',r:'ぼうけん',m:'ぼうけん'},{w:'想像',r:'そうぞう',m:'心に えがく'},
       {w:'感動',r:'かんどう',m:'心が うごく'},{w:'情報',r:'じょうほう',m:'インフォメーション'},
@@ -357,7 +357,7 @@ const WORLDS = [
       {w:'原因',r:'げんいん',m:'⇔結果。もと'},{w:'方法',r:'ほうほう',m:'やり方'},
       {w:'関係',r:'かんけい',m:'つながり'},{w:'影響',r:'えいきょう',m:'およぼす力'} ]}
   ]},
-  { id:'w3', name:'みずうみの里', emoji:'💧', sub:'中3 そうとう', stages:[
+  { id:'w3', name:'みずうみの里', emoji:'💧', sub:'気もちを あらわす ことば', stages:[
     { id:'w3-1', name:'湖のほとり', tre:'t7', items:[
       {w:'矛盾',r:'むじゅん',m:'つじつまが あわない'},{w:'抽象',r:'ちゅうしょう',m:'⇔具体。考えだけの'},
       {w:'微妙',r:'びみょう',m:'なんともいえない'},{w:'把握',r:'はあく',m:'しっかり つかむ'},
@@ -383,7 +383,7 @@ const WORLDS = [
       {w:'偶然',r:'ぐうぜん',m:'⇔必然。たまたま'},{w:'必要',r:'ひつよう',m:'いること'},
       {w:'重要',r:'じゅうよう',m:'大事'},{w:'主張',r:'しゅちょう',m:'言い分'} ]}
   ]},
-  { id:'w4', name:'ほのおの谷', emoji:'🔥', sub:'高1 そうとう', stages:[
+  { id:'w4', name:'ほのおの谷', emoji:'🔥', sub:'大人が つかう ことば', stages:[
     { id:'w4-1', name:'谷の入口', tre:'t10', items:[
       {w:'概要',r:'がいよう',m:'だいたいの ようす'},{w:'抽出',r:'ちゅうしゅつ',m:'とり出す'},
       {w:'阻害',r:'そがい',m:'じゃまする'},{w:'媒介',r:'ばいかい',m:'なかだち'},
@@ -409,7 +409,7 @@ const WORLDS = [
       {w:'相当',r:'そうとう',m:'かなり・釣り合う'},{w:'派生',r:'はせい',m:'分かれ生じる'},
       {w:'誘導',r:'ゆうどう',m:'みちびく'},{w:'抑止',r:'よくし',m:'おさえとめる'} ]}
   ]},
-  { id:'w5', name:'こおりの城', emoji:'❄️', sub:'高2 そうとう', stages:[
+  { id:'w5', name:'こおりの城', emoji:'❄️', sub:'ニュースの ことば', stages:[
     { id:'w5-1', name:'氷の門', tre:'t13', items:[
       {w:'忖度',r:'そんたく',m:'相手の気持ちを推し量る'},{w:'脆弱',r:'ぜいじゃく',m:'もろくて よわい'},
       {w:'陳腐',r:'ちんぷ',m:'ありふれて つまらない'},{w:'折衷',r:'せっちゅう',m:'両方を 合わせる'},
@@ -435,7 +435,7 @@ const WORLDS = [
       {w:'隠匿',r:'いんとく',m:'かくす'},{w:'是認',r:'ぜにん',m:'よしと認める'},
       {w:'黙認',r:'もくにん',m:'だまって認める'},{w:'誇示',r:'こじ',m:'見せびらかす'} ]}
   ]},
-  { id:'w6', name:'ほしぞらの塔', emoji:'🌌', sub:'高3 そうとう', stages:[
+  { id:'w6', name:'ほしぞらの塔', emoji:'🌌', sub:'ものしり ことば', stages:[
     { id:'w6-1', name:'塔のふもと', tre:'t16', items:[
       {w:'語彙',r:'ごい',m:'ことばの たくわえ'},{w:'帰納',r:'きのう',m:'⇔演繹。例から法則へ'},
       {w:'折衝',r:'せっしょう',m:'かけひき・交渉'},{w:'漸近',r:'ぜんきん',m:'だんだん 近づく'},
@@ -717,7 +717,7 @@ function finishBattle(){
 
 /* ---- STUDY ---- */
 function renderStudy(){
-  document.getElementById('study-seg').innerHTML=WORLDS.map(w=>`<button class="seg-btn ${S.studyWorld===w.id?'active':''}" onclick="setStudyWorld('${w.id}')">${w.emoji}${w.sub.replace(' そうとう','')}</button>`).join('');
+  document.getElementById('study-seg').innerHTML=WORLDS.map(w=>`<button class="seg-btn ${S.studyWorld===w.id?'active':''}" onclick="setStudyWorld('${w.id}')">${w.emoji}${w.name}</button>`).join('');
   const w=worldById(S.studyWorld);
   const items=worldItems(w);
   document.getElementById('study-count').textContent=`${w.name}・${items.length}こ（読めた ${items.filter(it=>S.mastered[it.w]).length}）`;
