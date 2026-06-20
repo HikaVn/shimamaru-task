@@ -166,6 +166,20 @@ body{
 .play-open{border:none;border-radius:12px;background:linear-gradient(135deg,#e8629a,#f4a0c4);color:#fff;font-family:inherit;font-weight:900;font-size:13px;padding:9px 13px;cursor:pointer;flex-shrink:0;text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .play-add:active,.play-open:active{transform:scale(.95)}
 
+/* むらづくり（小屋建設） */
+.village{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.village .bld{font-size:24px}
+.build-row{display:flex;align-items:center;gap:11px;padding:10px 4px}
+.build-row + .build-row{border-top:1px dashed #f0d7e4}
+.build-emoji{font-size:26px;flex-shrink:0;width:36px;text-align:center}
+.build-mid{flex:1;min-width:0}
+.build-name{font-size:13.5px;font-weight:800;color:var(--ink)}
+.build-desc{font-size:10.5px;color:var(--muted);margin-top:2px;word-break:break-word}
+.build-btn{border:none;border-radius:12px;background:linear-gradient(135deg,#f4a900,#ffcf4d);color:#fff;font-family:inherit;font-weight:900;font-size:12px;padding:9px 11px;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.build-btn:disabled{background:#e9e0e6;color:#b3a8b0;cursor:not-allowed}
+.build-built{font-size:12px;font-weight:900;color:var(--mint);flex-shrink:0}
+.build-locked{font-size:12px;font-weight:900;color:var(--muted);flex-shrink:0}
+
 /* today list compact */
 .mini-task{
   display:flex;align-items:center;gap:11px;padding:11px 6px;border-radius:14px;
@@ -463,6 +477,7 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
       </div>
       <div class="nest-name" id="home-name">しままる</div>
       <div class="nest-line" id="home-line"></div>
+      <div class="village" id="nest-village" style="margin-top:8px"></div>
     </div>
 
     <div id="alert-area"></div>
@@ -491,6 +506,11 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
     <div class="card">
       <div class="section-title">🎯 きょうの ミッション</div>
       <div id="quest-area"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🏘️ しままるの むら</div>
+      <div id="village-area"></div>
     </div>
   </div>
 
@@ -807,9 +827,20 @@ const BADGES = [
 ];
 /* 日常タスクに入れやすい “あそび・れんしゅう” アプリ（GitHub Pages 公開URL） */
 const EXTERNAL_APPS = [
-  {id:'kanji',  name:'しままる漢字', emoji:'📖', url:'https://hikavn.github.io/shimamaru-task/kanji/', desc:'中1〜高3の漢字を よむ ぼうけんRPG'},
+  {id:'kanji',  name:'しままる漢字', emoji:'📖', url:'https://hikavn.github.io/shimamaru-task/kanji/', desc:'生活で つかう漢字を よむ ぼうけんRPG'},
   {id:'typing', name:'しままるタイピング', emoji:'⌨️', url:'https://hikavn.github.io/shimamaru-typing/', desc:'ゆびの たいそう・タイピングれんしゅう'},
   {id:'codori', name:'コドリ', emoji:'🐤', url:'https://hikavn.github.io/codori-preview/', desc:'codori-preview を ひらくよ'}
+];
+/* レベル到達で建てられる小屋（しままるの むらづくり） */
+const BUILDINGS = [
+  {id:'tent',   lv:2,  cost:8,   emoji:'⛺',  name:'はじまりの テント', desc:'まずは ここから'},
+  {id:'hut',    lv:4,  cost:20,  emoji:'🛖',  name:'ちいさな 小屋',   desc:'しままるの すみか'},
+  {id:'house',  lv:6,  cost:35,  emoji:'🏠',  name:'ひなの おうち',   desc:'ひなたちの 小屋'},
+  {id:'food',   lv:9,  cost:55,  emoji:'🍙',  name:'ごはん 小屋',     desc:'みんなの ごはんどころ'},
+  {id:'books',  lv:12, cost:80,  emoji:'📚',  name:'としょ 小屋',     desc:'本が よめる 小屋'},
+  {id:'bath',   lv:15, cost:110, emoji:'♨️',  name:'おふろ 小屋',     desc:'ほっと あたたまる'},
+  {id:'clock',  lv:18, cost:150, emoji:'🕰️', name:'とけい台',       desc:'むらの まんなか'},
+  {id:'castle', lv:22, cost:220, emoji:'🏰',  name:'しままる城',     desc:'りっぱな おしろ！'}
 ];
 
 /* ---------- state ---------- */
@@ -895,6 +926,7 @@ function defaultGame(){
     placedDecor:[],
     stats:{tasksDone:0, focusDone:0},
     daily:null,
+    buildings:{},
     settings:{remindEnabled:false, remindTime:'09:00', lastRemindDate:''},
     lastSeen:''
   };
@@ -911,6 +943,7 @@ function loadGame(){
       owned:{acc:(p.owned&&p.owned.acc)||[], decor:(p.owned&&p.owned.decor)||[]},
       stats:{...d.stats, ...(p.stats||{})},
       settings:{...d.settings, ...(p.settings||{})},
+      buildings:(p.buildings&&typeof p.buildings==='object')?p.buildings:{},
       hatched:Array.isArray(p.hatched)?p.hatched:[],
       placedDecor:Array.isArray(p.placedDecor)?p.placedDecor:[]
     };
@@ -970,6 +1003,8 @@ function addXp(n){
       confetti(26);
       vibrate(30);
     }, 600);
+    const newB=BUILDINGS.find(b=>b.lv>before && b.lv<=after && !g.buildings[b.id]);
+    if(newB) setTimeout(()=>toast(`あたらしい小屋「${newB.name}」が 建てられるよ！🏗️`, '🏘️'), 1100);
   }
 }
 function addCoins(n){ g.coins+=n; }
@@ -1194,6 +1229,7 @@ function renderHome(){
   renderPlayApps();
   renderHomeToday();
   renderQuests();
+  renderVillage();
 }
 
 function renderNextAction(){
@@ -1283,6 +1319,45 @@ function addAppAsTask(id){
   toast(`「${a.name}」を やることに いれたよ！${cheer()}`, a.emoji);
   vibrate(10);
   render();
+}
+
+/* ---- しままるの むらづくり（レベル到達で小屋を建設） ---- */
+function renderVillage(){
+  const lv=levelInfo(g.xp).level;
+  const built=BUILDINGS.filter(b=>g.buildings[b.id]);
+  const nv=document.getElementById('nest-village');
+  if(nv) nv.innerHTML = built.map(b=>`<span class="bld">${b.emoji}</span>`).join('');
+  const el=document.getElementById('village-area');
+  if(!el) return;
+  const strip = built.length
+    ? `<div class="village">${built.map(b=>`<span class="bld" title="${escapeAttr(b.name)}">${b.emoji}</span>`).join('')}</div>`
+    : `<div class="muted" style="text-align:center;padding:8px 0">まだ 小屋が ないよ。レベルを あげて 建てよう！🏗️</div>`;
+  const rows=BUILDINGS.map(b=>{
+    const isBuilt=!!g.buildings[b.id], unlocked=lv>=b.lv;
+    let right;
+    if(isBuilt) right=`<span class="build-built">✅ 建設ずみ</span>`;
+    else if(!unlocked) right=`<span class="build-locked">🔒 Lv${b.lv}</span>`;
+    else { const can=g.coins>=b.cost; right=`<button class="build-btn" ${can?'':'disabled'} onclick="buildBuilding('${b.id}')">🏗️ 🌰${b.cost}</button>`; }
+    return `<div class="build-row">
+      <div class="build-emoji">${(unlocked||isBuilt)?b.emoji:'❔'}</div>
+      <div class="build-mid"><div class="build-name">${escapeHtml(b.name)}</div><div class="build-desc">${escapeHtml(b.desc)}・Lv${b.lv}で かいきん</div></div>
+      ${right}
+    </div>`;
+  }).join('');
+  el.innerHTML = strip + `<div style="height:6px"></div>` + rows;
+}
+function buildBuilding(id){
+  const b=BUILDINGS.find(x=>x.id===id);
+  if(!b || g.buildings[b.id]) return;
+  const lv=levelInfo(g.xp).level;
+  if(lv<b.lv){ toast(`Lv${b.lv}に なると 建てられるよ`, '🔒'); return; }
+  if(g.coins<b.cost){ toast('木のみが たりないよ〜🌰', '😣'); return; }
+  g.coins-=b.cost;
+  g.buildings[b.id]={built:true, date:Date.now()};
+  saveGame();
+  toast(`${b.name}が たった！🎉`, b.emoji);
+  confetti(20); vibrate(24);
+  renderHUD(); renderHome();
 }
 
 function renderQuests(){
