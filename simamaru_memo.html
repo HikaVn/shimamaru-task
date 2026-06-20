@@ -179,6 +179,24 @@ body{
 .build-btn:disabled{background:#e9e0e6;color:#b3a8b0;cursor:not-allowed}
 .build-built{font-size:12px;font-weight:900;color:var(--mint);flex-shrink:0}
 .build-locked{font-size:12px;font-weight:900;color:var(--muted);flex-shrink:0}
+.rpg-boss{text-align:center}
+.rpg-floor{font-size:12px;font-weight:900;color:var(--plum)}
+.rpg-pre{border:none;border-radius:12px;background:linear-gradient(135deg,#f4a900,#ffcf4d);color:#fff;font-family:inherit;font-weight:900;font-size:11px;padding:4px 10px;cursor:pointer}
+.rpg-boss-e{font-size:60px;animation:bob 3s ease-in-out infinite;display:inline-block}
+.rpg-boss-n{font-size:17px;font-weight:900;color:var(--ink);margin-top:2px}
+.rpg-hpbar{height:18px;background:#f1d6d6;border-radius:20px;overflow:hidden;position:relative;margin:8px 0}
+.rpg-hpbar>i{display:block;height:100%;background:linear-gradient(90deg,#ff6b6b,#e8629a);border-radius:20px;transition:width .3s}
+.rpg-hpbar>span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.35)}
+.rpg-combo{font-size:11.5px;font-weight:800;color:#e8629a}
+.rpg-leader{font-size:13px;font-weight:800;color:var(--plum);padding:8px 4px;border-bottom:1px solid #f5e8ef;display:flex;align-items:center;gap:6px}
+.rpg-mem{display:flex;align-items:center;gap:10px;padding:9px 4px}
+.rpg-mem+.rpg-mem{border-top:1px solid #f5e8ef}
+.rpg-mem-e{font-size:26px;flex-shrink:0}
+.rpg-mem-i{flex:1;min-width:0}
+.rpg-mem-n{font-size:13px;font-weight:800;color:var(--ink)}
+.rpg-type{font-size:10px;color:#fff;background:#a9c8f0;border-radius:8px;padding:1px 6px;margin-left:2px}
+.rpg-mem-l{font-size:11px;color:var(--muted);margin-top:2px}
+
 
 /* today list compact */
 .mini-task{
@@ -621,6 +639,10 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
     </div>
   </div>
 
+  <div id="battle-view" class="view hidden">
+    <div id="rpg-area"></div>
+  </div>
+
   <div class="footer">🐦 しままる、いっしょに がんばろうよ！ジュリリ！</div>
 </div>
 
@@ -631,6 +653,7 @@ a.tbtn,a.mini-focus{text-decoration:none;display:inline-flex;align-items:center;
     <button class="nav-btn" id="nav-list" onclick="setView('list')"><span class="ic">✅</span>おしごと</button>
     <button class="nav-btn" id="nav-calendar" onclick="setView('calendar')"><span class="ic">📅</span>カレンダー</button>
     <button class="nav-btn" id="nav-zukan" onclick="setView('zukan')"><span class="ic">🐣</span>ずかん</button>
+    <button class="nav-btn" id="nav-battle" onclick="setView('battle')"><span class="ic">⚔️</span>バトル</button>
     <button class="nav-btn" id="nav-stats" onclick="setView('stats')"><span class="ic">📊</span>きろく</button>
   </div>
 </nav>
@@ -844,6 +867,125 @@ const BUILDINGS = [
 ];
 function buildingBonus(key){ let s=0; for(const b of BUILDINGS){ if(g && g.buildings && g.buildings[b.id] && b.bonus[key]) s+=b.bonus[key]; } return s; }
 
+/* ===== JRPG: なかま＆ボスバトル（無限・DQ/FF/ロマサガ風） ===== */
+const COMPANIONS=[
+ {id:'piyo',name:'ぴよ',emoji:'🐤',type:'こうげき',base:8,grow:4},
+ {id:'mofu',name:'もふ',emoji:'🐣',type:'れんけい',base:7,grow:4},
+ {id:'kuro',name:'くろすけ',emoji:'🐧',type:'まもり',base:7,grow:5},
+ {id:'fuku',name:'ふくろう',emoji:'🦉',type:'まほう',base:10,grow:5},
+ {id:'kamo',name:'かもみ',emoji:'🦆',type:'かいふく',base:7,grow:4},
+ {id:'inko',name:'いんこ',emoji:'🦜',type:'まほう',base:11,grow:6},
+ {id:'hato',name:'ぽっぽ',emoji:'🕊️',type:'れんけい',base:9,grow:5},
+ {id:'taka',name:'たかし',emoji:'🦅',type:'こうげき',base:13,grow:7},
+ {id:'shira',name:'しらとり',emoji:'🦢',type:'かいふく',base:10,grow:6},
+ {id:'kuja',name:'くじゃく',emoji:'🦚',type:'まほう',base:14,grow:7},
+ {id:'dodo',name:'どどう',emoji:'🦤',type:'まもり',base:12,grow:7},
+ {id:'oosi',name:'おおとり',emoji:'🦩',type:'こうげき',base:16,grow:8}
+];
+const BOSSES=[{n:'スライムどり',e:'🟦'},{n:'おおコウモリ',e:'🦇'},{n:'ゴーレム',e:'🗿'},{n:'まじょ',e:'🧙'},{n:'がいこつ',e:'💀'},{n:'おばけ',e:'👻'},{n:'デビル',e:'😈'},{n:'ドラゴン',e:'🐉'},{n:'まおう',e:'👹'},{n:'りゅうおう',e:'🐲'}];
+const SKILLS={crit:{name:'かいしんの一撃',t:'ときどき 大ダメージ'},power:{name:'ちからため',t:'こうげき力UP'},combo:{name:'れんけい上手',t:'コンボ ダメUP'},slay:{name:'ボスきらい',t:'ボスに 追加ダメ'}};
+const PRESTIGE_FLOOR=20;
+function compDef(id){ return COMPANIONS.find(c=>c.id===id)||{name:'?',emoji:'🐦',type:'',base:6,grow:4}; }
+function compName(id){ return compDef(id).name; }
+function compPower(c){ const d=compDef(c.id); let p=d.base+(c.lv-1)*d.grow; if((c.skills||[]).includes('power')) p=Math.round(p*1.2); return p; }
+function shimaPower(){ return 6 + levelInfo(g.xp).level*3; }
+function prestigeMult(){ return 1 + 0.6*(g.rpg.prestige||0); }
+function partyPower(){ let p=shimaPower(); for(const c of g.rpg.party) p+=compPower(c); return Math.max(1, Math.round(p*prestigeMult())); }
+function partySkills(){ const s={}; for(const c of g.rpg.party) for(const id of (c.skills||[])) s[id]=true; return s; }
+function bossMaxHp(fl){ return Math.round(70*Math.pow(1.16,fl-1)*(1+(g.rpg.prestige||0)*0.5)); }
+function spawnBoss(){ const fl=g.rpg.floor; const metal=(fl%13===0); const b=BOSSES[(fl-1)%BOSSES.length]; const mx=bossMaxHp(fl); g.rpg.boss={name:metal?'メタルしま':b.n, emoji:metal?'✨':b.e, hp:mx, max:mx, floor:fl, metal:metal}; }
+function ensureBoss(){ if(!g.rpg) g.rpg=normalizeRpg(null); if(!g.rpg.boss || typeof g.rpg.boss.hp!=='number') spawnBoss(); }
+function rpgDailyReset(){ const t=todayYMD(); if(g.rpg.comboDay!==t){ g.rpg.combo=0; g.rpg.comboDay=t; } }
+function compExpNeeded(lv){ return 12 + lv*7; }
+function gainPartyExp(n){ for(const c of g.rpg.party){ c.exp=(c.exp||0)+n; let need=compExpNeeded(c.lv); while(c.exp>=need){ c.exp-=need; c.lv++; need=compExpNeeded(c.lv); } } }
+function recruitCompanion(reason){
+  const owned=new Set(g.rpg.party.map(c=>c.id));
+  const next=COMPANIONS.find(c=>!owned.has(c.id));
+  if(!next){ if(g.rpg.party.length){ const c=g.rpg.party[Math.floor(Math.random()*g.rpg.party.length)]; c.lv+=2; toast(compName(c.id)+' が ぐーんと せいちょう！','✨'); } return; }
+  g.rpg.party.push({id:next.id, lv:1, exp:0, skills:[]});
+  setTimeout(function(){ toast(next.name+' が なかまに なった！🎉（'+reason+'）', next.emoji); confetti(20); vibrate(24); }, 300);
+}
+function sparkSkill(){
+  if(!g.rpg.party.length) return;
+  const c=g.rpg.party[Math.floor(Math.random()*g.rpg.party.length)]; c.skills=c.skills||[];
+  const learn=Object.keys(SKILLS).filter(function(id){return !c.skills.includes(id);}); if(!learn.length) return;
+  const id=learn[Math.floor(Math.random()*learn.length)]; c.skills.push(id);
+  setTimeout(function(){ toast('💡 '+compName(c.id)+' が「'+SKILLS[id].name+'」を ひらめいた！','💡'); }, 600);
+}
+function onBossDefeated(){
+  const fl=g.rpg.floor, metal=g.rpg.boss.metal;
+  g.rpg.kills=(g.rpg.kills||0)+1;
+  const xpR=metal?(150+fl*25):Math.round(18+fl*5);
+  const coinR=metal?25:Math.round(4+fl*0.4);
+  addXp(xpR); addCoins(coinR); gainPartyExp(Math.round(xpR*0.6));
+  recruitCompanion('ボス撃破');
+  if(Math.random()<0.30) sparkSkill();
+  const nm=g.rpg.boss.name;
+  setTimeout(function(){ toast(nm+' を たおした！+'+xpR+'XP +'+coinR+'🌰','⚔️'); confetti(26); vibrate(34); }, 120);
+  g.rpg.floor=fl+1; spawnBoss();
+}
+function rpgAttack(mult, el){
+  ensureBoss(); rpgDailyReset();
+  g.rpg.combo=(g.rpg.combo||0)+1; if(g.rpg.combo>(g.rpg.comboBest||0)) g.rpg.comboBest=g.rpg.combo;
+  const sk=partySkills();
+  const comboBonus=1+Math.min(1, g.rpg.combo*0.03)*(sk.combo?1.3:1);
+  let dmg;
+  if(g.rpg.boss.metal){ dmg=Math.max(1, Math.round(partyPower()*0.05)); }
+  else { dmg=partyPower()*mult*comboBonus; if(sk.crit&&Math.random()<0.15) dmg*=2.2; if(sk.slay) dmg*=1.2; dmg=Math.max(1,Math.round(dmg)); }
+  g.rpg.boss.hp-=dmg; g.rpg.totalDmg=(g.rpg.totalDmg||0)+dmg;
+  gainPartyExp(Math.max(1, Math.round(dmg*0.08)));
+  if(el) floatGain(el, '⚔️'+dmg, '#c0392b');
+  let defeated=false;
+  if(g.rpg.boss.hp<=0){ defeated=true; onBossDefeated(); }
+  saveGame();
+  if(view==='battle') renderBattleView();
+  renderHUD();
+  return {dmg:dmg, defeated:defeated};
+}
+function canPrestige(){ return (g.rpg.floor||1) >= PRESTIGE_FLOOR; }
+function doPrestige(){
+  if(!canPrestige()){ toast(PRESTIGE_FLOOR+'かいまで すすむと てんせい できるよ','🔒'); return; }
+  if(!confirm('てんせいする？\nフロアと なかまのレベルは リセット。でも つよさが ずっと UPするよ！')) return;
+  g.rpg.prestige=(g.rpg.prestige||0)+1; g.rpg.floor=1; g.rpg.combo=0;
+  for(const c of g.rpg.party){ c.lv=1; c.exp=0; }
+  spawnBoss(); saveGame(); renderHUD(); renderBattleView();
+  toast('🌟 てんせい！つよさ ×'+prestigeMult().toFixed(1)+' に！','🌟'); confetti(44); vibrate(50);
+}
+function practiceReward(appId){
+  rpgDailyReset();
+  const t=todayYMD(); g.rpg.practice=g.rpg.practice||{};
+  if(g.rpg.practice[appId]===t){ toast('きょうの れんしゅうボーナスは もらったよ。またね🐦','✅'); return; }
+  g.rpg.practice[appId]=t;
+  addXp(15); addCoins(8); gainPartyExp(12);
+  if(Math.random()<0.5) recruitCompanion('れんしゅう');
+  else setTimeout(function(){ toast('れんしゅうボーナス！ +15XP +8🌰','🎁'); },200);
+  saveGame(); renderHUD(); if(view==='battle') renderBattleView();
+}
+function renderBattleView(){
+  const el=document.getElementById('rpg-area'); if(!el) return;
+  ensureBoss();
+  const b=g.rpg.boss, pw=partyPower(), hpPct=Math.max(0,Math.round(b.hp/b.max*100));
+  const partyHtml = g.rpg.party.length ? g.rpg.party.map(function(c){ const d=compDef(c.id); const sk=(c.skills||[]).map(function(id){return SKILLS[id]?'💡':'';}).join(''); return '<div class="rpg-mem"><div class="rpg-mem-e">'+d.emoji+'</div><div class="rpg-mem-i"><div class="rpg-mem-n">'+d.name+' <span class="rpg-type">'+d.type+'</span>'+sk+'</div><div class="rpg-mem-l">Lv'+c.lv+' ・ ちから '+compPower(c)+'</div></div></div>'; }).join('') : '<div class="muted" style="text-align:center;padding:8px">まだ なかまが いないよ。ボスを たおすと なかまに なるよ！</div>';
+  el.innerHTML=
+    '<div class="rpg-boss card">'+
+      '<div class="rpg-floor">⚔️ '+(g.rpg.prestige>0?'てんせい'+g.rpg.prestige+'・':'')+'フロア '+g.rpg.floor+'　'+(canPrestige()?'<button class="rpg-pre" onclick="doPrestige()">🌟てんせい</button>':'')+'</div>'+
+      '<div class="rpg-boss-e">'+b.emoji+'</div>'+
+      '<div class="rpg-boss-n">'+b.name+(b.metal?' ✨':'')+'</div>'+
+      '<div class="rpg-hpbar"><i style="width:'+hpPct+'%"></i><span>'+Math.max(0,b.hp)+' / '+b.max+'</span></div>'+
+      '<div class="rpg-combo">💥 コンボ '+(g.rpg.combo||0)+'（さいこう '+(g.rpg.comboBest||0)+'）・ たおした数 '+(g.rpg.kills||0)+'</div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="section-title">🛡️ パーティ ・ そうこうげき力 <b style="margin-left:6px;color:#c0392b">'+pw+'</b></div>'+
+      '<div class="rpg-leader"><span style="font-size:24px">🐦</span> しままる Lv'+levelInfo(g.xp).level+'（ちから '+shimaPower()+'）</div>'+
+      partyHtml+
+    '</div>'+
+    '<div class="card" style="text-align:center">'+
+      '<div class="muted" style="margin-bottom:8px">おしごとを かんりょうすると ボスを こうげき！🗡️<br>サイドアプリ（あそび・れんしゅう）でも XP・なかまGET</div>'+
+      '<button class="ghost-btn" onclick="setView(\'list\')">おしごとへ ▶</button>'+
+    '</div>';
+}
+
+
 /* ---------- state ---------- */
 let tasks = loadTasks();
 let g = loadGame();
@@ -928,8 +1070,18 @@ function defaultGame(){
     stats:{tasksDone:0, focusDone:0},
     daily:null,
     buildings:{},
+    rpg:{floor:1, prestige:0, party:[], boss:null, combo:0, comboBest:0, kills:0, totalDmg:0, practice:{}, comboDay:''},
     settings:{remindEnabled:false, remindTime:'09:00', lastRemindDate:''},
     lastSeen:''
+  };
+}
+function normalizeRpg(p){
+  const d={floor:1, prestige:0, party:[], boss:null, combo:0, comboBest:0, kills:0, totalDmg:0, practice:{}, comboDay:''};
+  if(!p||typeof p!=='object') return d;
+  return {...d, ...p,
+    party:Array.isArray(p.party)?p.party.map(c=>({id:c.id, lv:c.lv||1, exp:c.exp||0, skills:Array.isArray(c.skills)?c.skills:[]})):[],
+    practice:(p.practice&&typeof p.practice==='object')?p.practice:{},
+    boss:(p.boss&&typeof p.boss==='object')?p.boss:null
   };
 }
 function loadGame(){
@@ -945,6 +1097,7 @@ function loadGame(){
       stats:{...d.stats, ...(p.stats||{})},
       settings:{...d.settings, ...(p.settings||{})},
       buildings:(p.buildings&&typeof p.buildings==='object')?p.buildings:{},
+      rpg:normalizeRpg(p.rpg),
       hatched:Array.isArray(p.hatched)?p.hatched:[],
       placedDecor:Array.isArray(p.placedDecor)?p.placedDecor:[]
     };
@@ -1149,6 +1302,7 @@ function onTaskCompleted(task, srcEl){
   markActiveToday();
   const xpGain = 18 + Math.min(12, (task.subtasks||[]).length*2) + buildingBonus('xpTask');
   const coinGain = 3 + (task.priority==='high'?2:0);
+  rpgAttack(1.0, srcEl);
   addXp(xpGain);
   addCoins(coinGain);
   g.stats.tasksDone++;
@@ -1167,6 +1321,7 @@ function onTaskRecompleted(task, srcEl){
 }
 function onSubtaskCompleted(srcEl){
   addXp(4); addCoins(1); bumpQuest('subDone');
+  rpgAttack(0.4, srcEl);
   floatGain(srcEl, '+4XP', '#7d5bd9');
   vibrate(10);
 }
@@ -1175,6 +1330,7 @@ function onRecurringDone(task, srcEl){
   markActiveToday();
   const xp=12, coins=2;
   addXp(xp); addCoins(coins); g.stats.tasksDone++; bumpQuest('tasksDone');
+  rpgAttack(1.0, srcEl);
   floatGain(srcEl, `+${xp}XP`, '#3aa55f');
   vibrate(16);
   if(Math.random()<0.33){ confetti(16); const {sp,tier}=hatchEgg(task); showHatch(sp,tier,coins,xp); }
@@ -1304,7 +1460,7 @@ function renderPlayApps(){
         <div class="play-desc">${escapeHtml(a.desc)}</div>
       </div>
       <button class="play-add" onclick="addAppAsTask('${a.id}')">＋タスク</button>
-      <a class="play-open" href="${escapeAttr(a.url)}" target="_blank" rel="noopener">▶ ひらく</a>
+      <a class="play-open" href="${escapeAttr(a.url)}" target="_blank" rel="noopener" onclick="practiceReward('${a.id}')">▶ いってくる</a>
     </div>`).join('');
 }
 function addAppAsTask(id){
@@ -1826,11 +1982,12 @@ function render(){
   renderList();
   renderCalendar();
   renderZukan();
+  renderBattleView();
   renderStats();
 }
 function setView(v){
   view=v;
-  ['home','list','calendar','zukan','stats'].forEach(x=>{
+  ['home','list','calendar','zukan','battle','stats'].forEach(x=>{
     document.getElementById(x+'-view').classList.toggle('hidden', x!==v);
     document.getElementById('nav-'+x).classList.toggle('active', x===v);
   });
@@ -2129,6 +2286,7 @@ function finishFocus(){
   const xpGain=10+Math.round(mins/5)*3+buildingBonus('focusXp');
   const coinGain=Math.max(2, Math.round(mins/5)*2);
   addXp(xpGain); addCoins(coinGain);
+  rpgAttack(1.6, null);
   g.stats.focusDone++; bumpQuest('focus');
   markActiveToday();
   saveGame();
@@ -2407,6 +2565,7 @@ tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); })
   // first ever launch → start streak today gently? no, start on first completion.
   if(g._streakBroke){ setTimeout(()=>toast('れんぞくは とぎれたけど だいじょうぶ！また きょうから はじめよ🐦','🌱'), 700); g._streakBroke=false; }
   if(g._freezeUsed){ setTimeout(()=>toast(`おやすみ券を ${g._freezeUsed}まい つかって れんぞくを まもったよ🎫`,'🛡️'), 700); g._freezeUsed=0; }
+  ensureBoss(); rpgDailyReset();
   g.lastSeen=todayYMD();
   saveGame();
   render();
