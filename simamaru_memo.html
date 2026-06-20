@@ -833,15 +833,16 @@ const EXTERNAL_APPS = [
 ];
 /* レベル到達で建てられる小屋（しままるの むらづくり） */
 const BUILDINGS = [
-  {id:'tent',   lv:2,  cost:8,   emoji:'⛺',  name:'はじまりの テント', desc:'まずは ここから'},
-  {id:'hut',    lv:4,  cost:20,  emoji:'🛖',  name:'ちいさな 小屋',   desc:'しままるの すみか'},
-  {id:'house',  lv:6,  cost:35,  emoji:'🏠',  name:'ひなの おうち',   desc:'ひなたちの 小屋'},
-  {id:'food',   lv:9,  cost:55,  emoji:'🍙',  name:'ごはん 小屋',     desc:'みんなの ごはんどころ'},
-  {id:'books',  lv:12, cost:80,  emoji:'📚',  name:'としょ 小屋',     desc:'本が よめる 小屋'},
-  {id:'bath',   lv:15, cost:110, emoji:'♨️',  name:'おふろ 小屋',     desc:'ほっと あたたまる'},
-  {id:'clock',  lv:18, cost:150, emoji:'🕰️', name:'とけい台',       desc:'むらの まんなか'},
-  {id:'castle', lv:22, cost:220, emoji:'🏰',  name:'しままる城',     desc:'りっぱな おしろ！'}
+  {id:'tent',   lv:2,  cost:10,  emoji:'⛺',  name:'はじまりの テント', desc:'むらの はじまり',   bonus:{},                    bonusText:''},
+  {id:'hut',    lv:3,  cost:30,  emoji:'🛖',  name:'ちいさな 小屋',   desc:'しままるの すみか', bonus:{xpTask:2},            bonusText:'おしごとXP +2'},
+  {id:'house',  lv:4,  cost:60,  emoji:'🏠',  name:'ひなの おうち',   desc:'ひなたちの 小屋',   bonus:{hatch:0.04},          bonusText:'ひな レア率UP'},
+  {id:'food',   lv:6,  cost:100, emoji:'🍙',  name:'ごはん 小屋',     desc:'たべて げんき',     bonus:{xpTask:2},            bonusText:'おしごとXP +2'},
+  {id:'books',  lv:8,  cost:160, emoji:'📚',  name:'としょ 小屋',     desc:'本で かしこく',     bonus:{xpTask:3},            bonusText:'おしごとXP +3'},
+  {id:'bath',   lv:10, cost:240, emoji:'♨️',  name:'おふろ 小屋',     desc:'ほっと あたたまる', bonus:{focusXp:5},           bonusText:'しゅうちゅうXP +5'},
+  {id:'clock',  lv:12, cost:340, emoji:'🕰️', name:'とけい台',       desc:'むらの まんなか',   bonus:{xpTask:3},            bonusText:'おしごとXP +3'},
+  {id:'castle', lv:14, cost:520, emoji:'🏰',  name:'しままる城',     desc:'りっぱな おしろ！', bonus:{xpTask:5, hatch:0.04}, bonusText:'おしごとXP +5・レア率UP'}
 ];
+function buildingBonus(key){ let s=0; for(const b of BUILDINGS){ if(g && g.buildings && g.buildings[b.id] && b.bonus[key]) s+=b.bonus[key]; } return s; }
 
 /* ---------- state ---------- */
 let tasks = loadTasks();
@@ -1026,7 +1027,7 @@ function pickSpecies(tier){
 }
 function hatchEgg(task){
   const subsDone = (task.subtasks||[]).filter(s=>s.done).length;
-  let bonus = Math.min(0.2, subsDone*0.02 + (task.priority==='high'?0.05:0));
+  let bonus = Math.min(0.25, subsDone*0.02 + (task.priority==='high'?0.05:0) + buildingBonus('hatch'));
   const tier = rollHatchRarity(bonus);
   const sp = pickSpecies(tier);
   g.hatched.push({sid:sp.id, rarity:tier, date:todayYMD()});
@@ -1146,7 +1147,7 @@ function cheer(){ return CHEERS[Math.floor(Math.random()*CHEERS.length)]; }
    ========================================================= */
 function onTaskCompleted(task, srcEl){
   markActiveToday();
-  const xpGain = 18 + Math.min(12, (task.subtasks||[]).length*2);
+  const xpGain = 18 + Math.min(12, (task.subtasks||[]).length*2) + buildingBonus('xpTask');
   const coinGain = 3 + (task.priority==='high'?2:0);
   addXp(xpGain);
   addCoins(coinGain);
@@ -1340,7 +1341,7 @@ function renderVillage(){
     else { const can=g.coins>=b.cost; right=`<button class="build-btn" ${can?'':'disabled'} onclick="buildBuilding('${b.id}')">🏗️ 🌰${b.cost}</button>`; }
     return `<div class="build-row">
       <div class="build-emoji">${(unlocked||isBuilt)?b.emoji:'❔'}</div>
-      <div class="build-mid"><div class="build-name">${escapeHtml(b.name)}</div><div class="build-desc">${escapeHtml(b.desc)}・Lv${b.lv}で かいきん</div></div>
+      <div class="build-mid"><div class="build-name">${escapeHtml(b.name)}${b.bonusText?` <span style="color:#b8860b">✨${escapeHtml(b.bonusText)}</span>`:''}</div><div class="build-desc">${escapeHtml(b.desc)}・${isBuilt?'建設ずみ':'Lv'+b.lv+'で かいきん'}</div></div>
       ${right}
     </div>`;
   }).join('');
@@ -2125,7 +2126,7 @@ function stopFocusTimer(){ if(focusTimer){ clearInterval(focusTimer); focusTimer
 function finishFocus(){
   stopFocusTimer(); focusRunning=false;
   const mins=Math.round(focusDur/60);
-  const xpGain=10+Math.round(mins/5)*3;
+  const xpGain=10+Math.round(mins/5)*3+buildingBonus('focusXp');
   const coinGain=Math.max(2, Math.round(mins/5)*2);
   addXp(xpGain); addCoins(coinGain);
   g.stats.focusDone++; bumpQuest('focus');
