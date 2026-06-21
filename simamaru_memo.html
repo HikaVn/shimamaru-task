@@ -163,6 +163,7 @@ body{
 .play-name{font-size:14px;font-weight:800;color:var(--ink)}
 .play-desc{font-size:11px;color:var(--muted);margin-top:2px;word-break:break-word}
 .play-add{border:none;border-radius:12px;background:#fff0f8;color:var(--pink);font-family:inherit;font-weight:800;font-size:12px;padding:9px 10px;cursor:pointer;flex-shrink:0}
+.play-add.on{background:#e8f9ef;color:#2f9e5c}
 .play-open{border:none;border-radius:12px;background:linear-gradient(135deg,#e8629a,#f4a0c4);color:#fff;font-family:inherit;font-weight:900;font-size:13px;padding:9px 13px;cursor:pointer;flex-shrink:0;text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .play-add:active,.play-open:active{transform:scale(.95)}
 
@@ -1459,9 +1460,48 @@ function renderPlayApps(){
         <div class="play-name">${escapeHtml(a.name)}</div>
         <div class="play-desc">${escapeHtml(a.desc)}</div>
       </div>
-      <button class="play-add" onclick="addAppAsTask('${a.id}')">＋タスク</button>
-      <a class="play-open" href="${escapeAttr(a.url)}" target="_blank" rel="noopener" onclick="practiceReward('${a.id}')">▶ いってくる</a>
+      <button class="play-add ${appRoutineTask(a.url)?'on':''}" onclick="toggleAppRoutine('${a.id}')">${appRoutineTask(a.url)?'🔁 日課ちゅう':'🔁 日課'}</button>
+      <a class="play-open" href="${escapeAttr(a.url)}" target="_blank" rel="noopener" onclick="visitApp('${a.id}')">▶ いってくる</a>
     </div>`).join('');
+}
+function appRoutineTask(url){ return tasks.find(t=>t.link===url && isRecurring(t)); }
+function toggleAppRoutine(appId){
+  const a=EXTERNAL_APPS.find(x=>x.id===appId); if(!a) return;
+  const ex=appRoutineTask(a.url);
+  if(ex){ tasks=tasks.filter(t=>t.id!==ex.id); save(); toast('「'+a.name+'」を 日課から はずしたよ', a.emoji); render(); return; }
+  const now=Date.now();
+  const task=ensureTaskShape({id:now, name:a.emoji+' '+a.name, note:'まいにちの れんしゅう', link:a.url, repeat:{type:'daily',days:[]}, priority:'medium', startDate:todayYMD(), done:false, subtasks:[], history:[], createdAt:now, updatedAt:now});
+  recordHistory(task,'routine'); tasks.push(task); bumpQuest('added'); save();
+  toast('「'+a.name+'」を まいにちの日課に した！🔁', a.emoji); confetti(14); vibrate(12); render();
+}
+function snapSide(){ const o={}; try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k===STORAGE_KEY||k===GAME_KEY) continue; o[k]=localStorage.getItem(k); } }catch(e){} return o; }
+function visitApp(appId){ g.rpg.visit={app:appId, at:Date.now(), snap:snapSide()}; saveGame(); }
+function reflectVisit(){
+  if(!g.rpg || !g.rpg.visit) return;
+  const v=g.rpg.visit; const elapsed=Date.now()-v.at;
+  if(elapsed<3000) return;
+  g.rpg.visit=null;
+  const a=EXTERNAL_APPS.find(x=>x.id===v.app); if(!a){ saveGame(); return; }
+  const today=todayYMD();
+  g.rpg.practice=g.rpg.practice||{};
+  if(g.rpg.practice[v.app]===today){ saveGame(); return; }
+  const now=snapSide();
+  let changed=false; for(const k in now){ if(now[k]!==v.snap[k]) changed=true; } for(const k in v.snap){ if(!(k in now)) changed=true; }
+  let kxp=0;
+  try{ const bf=v.snap['shimamaru-kanji-v2'], af=now['shimamaru-kanji-v2']; if(af){ const xb=bf?(JSON.parse(bf).xp||0):0, xa=JSON.parse(af).xp||0; kxp=Math.max(0,xa-xb); } }catch(e){}
+  const practiced = changed || elapsed>15000;
+  if(!practiced){ saveGame(); return; }
+  g.rpg.practice[v.app]=today;
+  let xpR=15, coinR=8;
+  if(kxp>0){ xpR=Math.min(80, 15+Math.round(kxp*0.5)); coinR=Math.min(25, 8+Math.round(kxp*0.15)); }
+  addXp(xpR); addCoins(coinR); gainPartyExp(12);
+  rpgAttack(1.0, null);
+  const rt=appRoutineTask(a.url);
+  if(rt && !rt.done){ rt.done=true; rt.everDone=true; rt.repeatLastDone=today; rt.updatedAt=Date.now(); markActiveToday(); }
+  if(Math.random()<0.5) recruitCompanion('れんしゅう');
+  saveGame(); renderHUD(); render();
+  const msg = kxp>0 ? ('漢字れんしゅうの せいか！+'+xpR+'XP +'+coinR+'🌰') : ('れんしゅう おつかれさま！+'+xpR+'XP +'+coinR+'🌰');
+  setTimeout(function(){ toast(msg,'🎁'); confetti(16); }, 200);
 }
 function addAppAsTask(id){
   const a=EXTERNAL_APPS.find(x=>x.id===id);
@@ -2575,7 +2615,9 @@ tasks.forEach(t=>{ if(!t.history||!t.history.length) recordHistory(t,'init'); })
   initSync();
   checkReminderNow();
   setInterval(checkReminderNow, 60000);
-  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) checkReminderNow(); });
+  reflectVisit();
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ checkReminderNow(); reflectVisit(); } });
+  window.addEventListener('focus', reflectVisit);
 })();
 </script>
 </body>
