@@ -77,6 +77,8 @@ body{
 .world.locked{opacity:.55}
 .world-head{display:flex;align-items:center;gap:13px;padding:14px;cursor:pointer}
 .world-emoji{font-size:34px;flex-shrink:0;width:50px;height:50px;display:flex;align-items:center;justify-content:center;background:#eef5ff;border-radius:16px}
+.asset-img{display:inline-block;width:1em;height:1em;object-fit:contain;vertical-align:middle}
+.world-emoji .asset-img{width:46px;height:46px}
 .world-mid{flex:1;min-width:0}
 .world-name{font-size:15px;font-weight:900;color:var(--ink)}
 .world-sub{font-size:11px;color:var(--muted);margin-top:2px}
@@ -113,6 +115,7 @@ body{
 .monster.boss{background:linear-gradient(135deg,#fff,#fff3f8);border:2px solid #f3c8de}
 .monster.treasure{background:linear-gradient(135deg,#fffaf0,#fff);border:2px solid #f4d58a}
 .mon-emoji{font-size:54px;animation:bob 3s ease-in-out infinite;display:inline-block}
+.mon-emoji .asset-img{width:96px;height:96px}
 .mon-tag{display:inline-block;color:#fff;font-size:11px;font-weight:900;border-radius:12px;padding:3px 12px;margin-bottom:6px}
 .mon-tag.boss{background:linear-gradient(135deg,#e8629a,#f4a0c4)}
 .mon-tag.tre{background:linear-gradient(135deg,#f4a900,#ffcf4d)}
@@ -139,6 +142,7 @@ body{
 .tre-card{background:linear-gradient(135deg,#fffaf0,#fff);border:2px solid #f4d58a;border-radius:18px;padding:14px;margin:12px 0;animation:popIn .35s}
 .tre-chest{font-size:40px;animation:chestShake .5s}
 .tre-emoji{font-size:46px}
+.tre-emoji .asset-img{width:76px;height:76px}
 .tre-name{font-size:16px;font-weight:900;color:#b8860b;margin-top:4px}
 .tre-desc{font-size:12px;color:var(--muted);margin-top:4px}
 .tre-kira{font-size:12px;font-weight:900;color:var(--rose);margin-top:4px}
@@ -160,6 +164,7 @@ body{
 .tre-cell{border-radius:16px;padding:12px 6px;text-align:center;background:#faf7ee;border:2px solid #f1e6cf;position:relative}
 .tre-cell.locked{opacity:.5;background:#f3f5f8;border-color:#e7eef5}
 .tre-cell .e{font-size:32px;line-height:1.1}
+.tre-cell .e .asset-img{width:44px;height:44px}
 .tre-cell.locked .e{filter:grayscale(1) brightness(1.2)}
 .tre-cell .n{font-size:11px;font-weight:800;color:var(--ink);margin-top:4px}
 .tre-cell .k{position:absolute;top:4px;right:6px;font-size:13px}
@@ -465,6 +470,20 @@ const WORLDS = [
   ]}
 ];
 const MON = ['🐛','🦋','🐌','🐸','🦎','🐢','🦔','🐲','👾','🦕'];
+const ASSET_ROOT = '../assets/imagegen/';
+const WORLD_ASSETS = {
+  w1:'items/clover.png', w2:'items/leaf.png', w3:'items/gem.png',
+  w4:'bosses/devil.png', w5:'items/snowflake.png', w6:'items/star.png'
+};
+const MON_ASSETS = ['bosses/slimebird.png','bosses/bat.png','bosses/golem.png','bosses/ghost.png','bosses/devil.png','bosses/dragon.png','characters/dodo.png','bosses/dragonking.png','bosses/maou.png','characters/kuja.png'];
+const TREASURE_ASSETS = {
+  t1:'items/clover.png', t2:'items/acorn.png', t3:'items/gem.png', t4:'characters/sora.png',
+  t5:'items/leaf.png', t6:'items/lamp.png', t7:'items/treasure_chest.png', t8:'items/wand.png',
+  t9:'items/gem.png', t10:'bosses/devil.png', t11:'items/wand.png', t12:'buildings/bath.png',
+  t13:'items/snowflake.png', t14:'items/gem.png', t15:'items/crown.png', t16:'items/star.png',
+  t17:'items/gem.png', t18:'items/gem.png', t19:'items/rainbow.png', t20:'items/balloon.png',
+  t21:'items/gem.png', t22:'bosses/golem.png', t23:'items/snowflake.png', t24:'items/star.png'
+};
 const STORY = {
   w1:'みどりの森を ぬけた！木のみが きらきら ひかっている。',
   w2:'かぜの丘の つよい風に のって、しままるは もっと とおくへ。',
@@ -484,6 +503,18 @@ const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 function load(){ try{ const r=localStorage.getItem(STORAGE_KEY); if(!r) return defaultState(); return Object.assign(defaultState(), JSON.parse(r)); }catch(e){ return defaultState(); } }
 function save(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(S)); }
+function escAttr(str){ return String(str).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+function assetImg(path, fallback, alt='', cls=''){
+  if(!path) return fallback;
+  return `<img class="asset-img ${cls}" src="${ASSET_ROOT}${escAttr(path)}" alt="${escAttr(alt||fallback||'')}" loading="lazy" decoding="async" data-fallback="${escAttr(fallback||'')}" onerror="this.replaceWith(document.createTextNode(this.dataset.fallback||''))">`;
+}
+function worldImg(w){ return assetImg(WORLD_ASSETS[w.id], w.emoji, w.name); }
+function monImg(monEmoji, idx, isBoss, isTre){
+  if(isTre) return assetImg('items/treasure_chest.png', monEmoji, 'たからばこ');
+  if(isBoss) return assetImg('bosses/dragonking.png', monEmoji, 'ボス');
+  return assetImg(MON_ASSETS[idx%MON_ASSETS.length], monEmoji, 'モンスター');
+}
+function treasureImg(id, t){ return assetImg(TREASURE_ASSETS[id], t.e, t.n); }
 
 /* ---- data helpers ---- */
 function worldById(id){ return WORLDS.find(w=>w.id===id); }
@@ -559,7 +590,7 @@ function renderMap(){
     }).join('');
     return `<div class="world ${unlocked?'':'locked'} ${cleared?'cleared':''} ${open?'open':''}">
       <div class="world-head" onclick="${unlocked?`toggleWorld('${w.id}')`:`toast('まえの ワールドを クリアすると ひらくよ','🔒')`}">
-        <div class="world-emoji">${unlocked?w.emoji:'🔒'}</div>
+        <div class="world-emoji">${unlocked?worldImg(w):'🔒'}</div>
         <div class="world-mid">
           <div class="world-name">${w.name}</div>
           <div class="world-sub">${w.sub}・ステージ ${ns}・漢字 ${ns*10}こ</div>
@@ -604,14 +635,16 @@ function renderBattle(){
   document.getElementById('battle-score').textContent=battle.score;
   const choices=buildChoices(cur.it, battle.pool);
   const isTre = battle.mode==='stage' && battle.qi===battle.treasureAt && !cur.boss && !battle.gotTreasure;
-  const monEmoji = cur.boss?'🐲':(isTre?'🎁':MON[(battle.qi+cur.it.w.length)%MON.length]);
+  const monIdx=(battle.qi+cur.it.w.length)%MON.length;
+  const monEmoji = cur.boss?'🐲':(isTre?'🎁':MON[monIdx]);
+  const monHtml = monImg(monEmoji, monIdx, cur.boss, isTre);
   battle.answered=false;
   battle._isTre=isTre;
   document.getElementById('battle-body').innerHTML=`
     <div class="monster ${cur.boss?'boss':''} ${isTre?'treasure':''}">
       ${cur.boss?'<div class="mon-tag boss">⚔️ ボス かんじ</div>':''}
       ${isTre?'<div class="mon-tag tre">🎁 たからばこを まもる かんじ</div>':''}
-      <div class="mon-emoji">${monEmoji}</div>
+      <div class="mon-emoji">${monHtml}</div>
       <div class="mon-ask">この ことば、なんて 読む？</div>
       <div class="mon-word">${cur.it.w}</div>
     </div>
@@ -680,7 +713,7 @@ function finishBattle(){
     const kira = S.treasures[battle.tre].kira;
     treHtml = `<div class="tre-card">
       <div class="tre-chest">🧰</div>
-      <div class="tre-emoji">${tre.e}</div>
+      <div class="tre-emoji">${treasureImg(battle.tre, tre)}</div>
       <div class="tre-name">${tre.n} を てにいれた！</div>
       <div class="tre-desc">${tre.d}</div>
       ${kira?'<div class="tre-kira">✨ キラ ✨（パーフェクト！）</div>':''}
@@ -747,8 +780,8 @@ function renderTreasures(){
   document.getElementById('tre-count').textContent=`あつめた おたから：${got} / ${ids.length}`;
   document.getElementById('tre-grid').innerHTML=ids.map(id=>{
     const t=TREASURES[id], have=S.treasures[id];
-    if(!have) return `<div class="tre-cell locked"><div class="e">${t.e}</div><div class="n">？？？</div></div>`;
-    return `<div class="tre-cell" onclick="toast('${t.n}：${t.d}','${t.e}')">${have.kira?'<div class="k">✨</div>':''}<div class="e">${t.e}</div><div class="n">${t.n}</div></div>`;
+    if(!have) return `<div class="tre-cell locked"><div class="e">${treasureImg(id, t)}</div><div class="n">？？？</div></div>`;
+    return `<div class="tre-cell" onclick="toast('${t.n}：${t.d}','${t.e}')">${have.kira?'<div class="k">✨</div>':''}<div class="e">${treasureImg(id, t)}</div><div class="n">${t.n}</div></div>`;
   }).join('');
 }
 
