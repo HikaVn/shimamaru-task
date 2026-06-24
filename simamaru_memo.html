@@ -895,6 +895,31 @@ const COMPANIONS=[
  {id:'dodo',name:'どどう',emoji:'🦤',type:'まもり',base:12,grow:7},
  {id:'oosi',name:'おおとり',emoji:'🦩',type:'こうげき',base:16,grow:8}
 ];
+const ENEMIES=[
+ {n:'スライムどり',e:'🟦',min:1,boss:false},
+ {n:'いもむし',e:'🐛',min:1,boss:false},
+ {n:'こうもり',e:'🦇',min:4,boss:false},
+ {n:'きのこムシ',e:'🍄',min:7,boss:false},
+ {n:'おばけ',e:'👻',min:11,boss:false},
+ {n:'ガイコツ',e:'💀',min:16,boss:false},
+ {n:'ウイルス',e:'🦠',min:22,boss:false},
+ {n:'いわゴーレム',e:'🗿',min:5,boss:true},
+ {n:'まじょ',e:'🧙',min:10,boss:true},
+ {n:'デビル',e:'😈',min:15,boss:true},
+ {n:'ドラゴン',e:'🐉',min:25,boss:true},
+ {n:'まおう',e:'👹',min:35,boss:true},
+ {n:'りゅうおう',e:'🐲',min:45,boss:true}
+];
+const BOSS_EVERY=5;
+function pickEnemy(fl){
+  if(fl%13===0) return {name:'メタルしま',emoji:'✨',metal:true,isBoss:false};
+  const isBoss=(fl%BOSS_EVERY===0);
+  const pool=ENEMIES.filter(function(x){return x.boss===isBoss && x.min<=fl;});
+  let pick;
+  if(isBoss){ pick=pool.length?pool[pool.length-1]:{n:'ボス',e:'⚔️'}; }
+  else { if(!pool.length) pick=ENEMIES[0]; else { const latest=pool[pool.length-1]; pick=Math.random()<0.6?latest:pool[Math.floor(Math.random()*pool.length)]; } }
+  return {name:pick.n, emoji:pick.e, metal:false, isBoss:isBoss};
+}
 const BOSSES=[{n:'スライムどり',e:'🟦'},{n:'おおコウモリ',e:'🦇'},{n:'ゴーレム',e:'🗿'},{n:'まじょ',e:'🧙'},{n:'がいこつ',e:'💀'},{n:'おばけ',e:'👻'},{n:'デビル',e:'😈'},{n:'ドラゴン',e:'🐉'},{n:'まおう',e:'👹'},{n:'りゅうおう',e:'🐲'}];
 const ASSET_ROOT = './assets/imagegen/';
 const IMAGE_ASSETS = {
@@ -925,8 +950,8 @@ const IMAGE_ASSETS = {
     shira:'characters/haku.png', kuja:'characters/kuja.png', dodo:'characters/dodo.png', oosi:'characters/oosi.png'
   },
   bosses:{
-    'スライムどり':'bosses/slimebird.png', 'おおコウモリ':'bosses/bat.png', 'ゴーレム':'bosses/golem.png',
-    'まじょ':'bosses/witch.png', 'がいこつ':'bosses/skeleton.png', 'おばけ':'bosses/ghost.png',
+    'スライムどり':'bosses/slimebird.png', 'おおコウモリ':'bosses/bat.png', 'こうもり':'bosses/bat.png', 'ゴーレム':'bosses/golem.png', 'いわゴーレム':'bosses/golem.png',
+    'まじょ':'bosses/witch.png', 'がいこつ':'bosses/skeleton.png', 'ガイコツ':'bosses/skeleton.png', 'おばけ':'bosses/ghost.png',
     'デビル':'bosses/devil.png', 'ドラゴン':'bosses/dragon.png', 'まおう':'bosses/maou.png',
     'りゅうおう':'bosses/dragonking.png', 'メタルしま':'characters/stage_teacher.png'
   },
@@ -941,8 +966,8 @@ function shimaPower(){ return 6 + levelInfo(g.xp).level*3; }
 function prestigeMult(){ return 1 + 0.6*(g.rpg.prestige||0); }
 function partyPower(){ let p=shimaPower(); for(const c of g.rpg.party) p+=compPower(c); return Math.max(1, Math.round(p*prestigeMult())); }
 function partySkills(){ const s={}; for(const c of g.rpg.party) for(const id of (c.skills||[])) s[id]=true; return s; }
-function bossMaxHp(fl){ return Math.round(70*Math.pow(1.16,fl-1)*(1+(g.rpg.prestige||0)*0.5)); }
-function spawnBoss(){ const fl=g.rpg.floor; const metal=(fl%13===0); const b=BOSSES[(fl-1)%BOSSES.length]; const mx=bossMaxHp(fl); g.rpg.boss={name:metal?'メタルしま':b.n, emoji:metal?'✨':b.e, hp:mx, max:mx, floor:fl, metal:metal}; }
+function bossMaxHp(fl, isBoss){ const base=Math.round(60*Math.pow(1.15,fl-1)*(1+(g.rpg.prestige||0)*0.5)); return Math.max(8, Math.round(base*(isBoss?1.7:0.6))); }
+function spawnBoss(){ const fl=g.rpg.floor; const e=pickEnemy(fl); const mx=bossMaxHp(fl, e.isBoss); g.rpg.boss={name:e.name, emoji:e.emoji, hp:mx, max:mx, floor:fl, metal:e.metal, isBoss:e.isBoss}; }
 function ensureBoss(){ if(!g.rpg) g.rpg=normalizeRpg(null); if(!g.rpg.boss || typeof g.rpg.boss.hp!=='number') spawnBoss(); }
 function rpgDailyReset(){ const t=todayYMD(); if(g.rpg.comboDay!==t){ g.rpg.combo=0; g.rpg.comboDay=t; } }
 function compExpNeeded(lv){ return 12 + lv*7; }
@@ -962,12 +987,12 @@ function sparkSkill(){
   setTimeout(function(){ toast('💡 '+compName(c.id)+' が「'+SKILLS[id].name+'」を ひらめいた！','💡'); }, 600);
 }
 function onBossDefeated(){
-  const fl=g.rpg.floor, metal=g.rpg.boss.metal;
+  const fl=g.rpg.floor, metal=g.rpg.boss.metal, wasBoss=g.rpg.boss.isBoss;
   g.rpg.kills=(g.rpg.kills||0)+1;
-  const xpR=metal?(150+fl*25):Math.round(18+fl*5);
+  let xpR=metal?(150+fl*25):Math.round(18+fl*5); if(wasBoss) xpR=Math.round(xpR*1.6);
   const coinR=metal?25:Math.round(4+fl*0.4);
   addXp(xpR); addCoins(coinR); gainPartyExp(Math.round(xpR*0.6));
-  recruitCompanion('ボス撃破');
+  if(fl===1 || fl%BOSS_EVERY===0) recruitCompanion(fl%BOSS_EVERY===0?'ボス撃破':'たびだち');
   if(Math.random()<0.30) sparkSkill();
   const nm=g.rpg.boss.name;
   setTimeout(function(){ toast(nm+' を たおした！+'+xpR+'XP +'+coinR+'🌰','⚔️'); confetti(26); vibrate(34); }, 120);
@@ -1019,7 +1044,7 @@ function renderBattleView(){
     '<div class="rpg-boss card">'+
       '<div class="rpg-floor">⚔️ '+(g.rpg.prestige>0?'てんせい'+g.rpg.prestige+'・':'')+'フロア '+g.rpg.floor+'　'+(canPrestige()?'<button class="rpg-pre" onclick="doPrestige()">🌟てんせい</button>':'')+'</div>'+
       '<div class="rpg-boss-e">'+bossImg(b)+'</div>'+
-      '<div class="rpg-boss-n">'+b.name+(b.metal?' ✨':'')+'</div>'+
+      '<div class="rpg-boss-n">'+b.name+(b.metal?' ✨メタル':'')+(b.isBoss?' 👑':'')+'</div>'+
       '<div class="rpg-hpbar"><i style="width:'+hpPct+'%"></i><span>'+Math.max(0,b.hp)+' / '+b.max+'</span></div>'+
       '<div class="rpg-combo">💥 コンボ '+(g.rpg.combo||0)+'（さいこう '+(g.rpg.comboBest||0)+'）・ たおした数 '+(g.rpg.kills||0)+'</div>'+
     '</div>'+
